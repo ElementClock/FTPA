@@ -26,8 +26,8 @@ from ftpa.data_loader import (
 from ftpa.time_utils import (
     select_time_window,
     format_time_seconds,
-    _time_to_seconds_array,
-    _parse_time_to_seconds
+    time_to_seconds_array,
+    parse_time_to_seconds
 )
 from ftpa.computing import compute_total_weight_rel_cg, compute_fitted_circle_radius
 from ftpa.statistics import compute_stat, compute_var_stats, show_group_stats
@@ -196,20 +196,20 @@ class TestTimeUtils:
     def test_time_to_seconds_array(self):
         """测试时间数组转秒数"""
         time_vec = np.array([0, 1, 2, 3], dtype='timedelta64[s]')
-        seconds = _time_to_seconds_array(time_vec)
+        seconds = time_to_seconds_array(time_vec)
         assert np.array_equal(seconds, [0, 1, 2, 3])
     
-    def test_parse_time_to_seconds(self):
+    def testparse_time_to_seconds(self):
         """测试时间字符串转秒数"""
-        assert _parse_time_to_seconds("00:00:00") == 0
-        assert _parse_time_to_seconds("00:01:00") == 60
-        assert _parse_time_to_seconds("01:00:00") == 3600
-        assert _parse_time_to_seconds("01:01:01.500") == 3661.5
+        assert parse_time_to_seconds("00:00:00") == 0
+        assert parse_time_to_seconds("00:01:00") == 60
+        assert parse_time_to_seconds("01:00:00") == 3600
+        assert parse_time_to_seconds("01:01:01.500") == 3661.5
     
-    def test_parse_time_to_seconds_numeric(self):
+    def testparse_time_to_seconds_numeric(self):
         """测试数值时间转秒数"""
-        assert _parse_time_to_seconds(100) == 100
-        assert _parse_time_to_seconds(3661.5) == 3661.5
+        assert parse_time_to_seconds(100) == 100
+        assert parse_time_to_seconds(3661.5) == 3661.5
     
     def test_format_time_seconds(self):
         """测试秒数转时间字符串"""

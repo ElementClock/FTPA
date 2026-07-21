@@ -6,6 +6,7 @@
 
 import numpy as np
 from scipy.linalg import eig
+from .constants import X0, L
 from .time_utils import select_time_window
 
 
@@ -28,10 +29,8 @@ def compute_total_weight_rel_cg(oil_lout, oil_lin, oil_rin, oil_rout,
     返回:
         (total_weight, rel_cg): 总重量 (kg) 和相对重心 (%) 的 numpy 数组
     """
-    # 基础配置
-    X0 = 15.902  # 参考点绝对重心 (m)
-    L = 4.453    # 参考长度 (m)
-    
+    # 基础配置（从 constants.py 导入 X0 和 L）
+
     # 1007架机燃油质量特性基础数据
     # 右内（及左内）燃油质量特性
     fuel_rin_oil = np.array([0, 100, 200, 300, 400, 500, 600, 700, 800, 900, 1000, 1100, 
@@ -224,6 +223,10 @@ def _taubin_circle_fit(x, y):
     
     # 取实部（MATLAB 的 eig 返回实数，但 scipy 可能返回复数）
     u = np.real(u)
+
+    # 防范共线点: u[0] ≈ 0 时圆不存在
+    if abs(u[0]) < 1e-12:
+        return np.nan, np.nan, np.nan
     
     # 计算圆心和半径
     a = -u[1] / (2.0 * u[0]) + xm

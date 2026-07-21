@@ -119,6 +119,7 @@ FTPA/
 │       ├── computing.py          # 计算模块
 │       ├── statistics.py         # 统计分析模块
 │       ├── plotting.py           # 可视化模块
+│       ├── constants.py          # 配置常量
 │       ├── time_utils.py         # 时间工具模块
 │       └── utils.py              # 通用工具函数
 │
@@ -127,9 +128,6 @@ FTPA/
 │   ├── test_comprehensive.py     # 综合测试
 │   ├── test_modules.py           # 模块测试
 │   └── test_unit.py              # 单元测试
-│
-├── config/                       # 配置文件目录
-│   └── config.yaml               # 主配置文件
 │
 ├── data/                         # 数据文件目录
 │   ├── raw/                      # 原始数据
@@ -232,32 +230,20 @@ plotting.py (可视化)
 
 ## 配置管理
 
-项目使用 `config/config.yaml` 进行配置管理：
+项目使用 `src/ftpa/constants.py` 进行集中配置管理。此文件为唯一的配置来源（single source of truth），包含以下参数：
 
-```yaml
-data:
-  txt_file: "数据文件路径"
-  excel_file: "标签映射文件路径"
-  chunk_size: 10000
-  trim_head: 50
-  trim_tail: 50
+| 参数 | 值 | 说明 |
+|------|-----|------|
+| `BASE_WEIGHT` | 48487.0 | 任务总重量 (kg) |
+| `BASE_REL_CG` | 25.28 | 任务重心 (%) |
+| `BASE_OIL` | 6000.0 | 任务油量 (kg) |
+| `X0` | 15.902 | 参考点绝对重心 (m) |
+| `L` | 4.453 | 参考长度 (m) |
+| `TRIM_HEAD` | 50 | 文件头部裁剪行数 |
+| `TRIM_TAIL` | 50 | 文件尾部裁剪行数 |
+| `CHUNK_SIZE` | 10000 | 分块读取每块行数 |
 
-aircraft:
-  base_weight: 48487.0    # 任务总重量 (kg)
-  base_rel_cg: 25.28      # 任务重心 (%)
-  base_oli: 6000.0        # 任务油量 (kg)
-  x0: 15.902              # 重心参考点
-  l: 4.453                # 参考长度
-
-output:
-  log_dir: "logs"
-  result_dir: "data/results"
-  plot_dir: "data/plots"
-
-logging:
-  level: "INFO"
-  file: "logs/ftpa.log"
-```
+如需修改默认参数（如更换机型），只需编辑 `constants.py` 中的对应值。
 
 ---
 

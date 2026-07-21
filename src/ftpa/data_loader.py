@@ -7,15 +7,16 @@
 import os
 import zipfile
 import tempfile
+import threading
 import pandas as pd
 import numpy as np
 from .utils import column_to_field_name
+from .constants import TRIM_HEAD, TRIM_TAIL
 
 
 # 模块级缓存（替代 MATLAB 的 persistent 变量）
 _file_cache = {}
-_trim_head = 50
-_trim_tail = 50
+_file_cache_lock = threading.Lock()
 
 
 def _resolve_zip_file(filepath: str) -> tuple[str, bool]:
@@ -86,8 +87,9 @@ def param_extract(filename: str) -> dict:
     abs_file = os.path.abspath(filename)
     
     # 检查缓存
-    if abs_file in _file_cache:
-        return _file_cache[abs_file]
+    with _file_cache_lock:
+        if abs_file in _file_cache:
+            return _file_cache[abs_file]
     
     # 读取数据文件
     df = _read_data_file(abs_file)
@@ -109,10 +111,10 @@ def param_extract(filename: str) -> dict:
         
         # 应用截取（与 MATLAB extractColumnEfficient 一致）
         n_total = len(col_data)
-        n_drop = _trim_head + _trim_tail
+        n_drop = TRIM_HEAD + TRIM_TAIL
         
         if n_total >= n_drop:
-            col_data = col_data[_trim_head:n_total - _trim_tail]
+            col_data = col_data[TRIM_HEAD:n_total - TRIM_TAIL]
         else:
             print(f"警告: 数据长度 ({n_total}) 小于需截取的长度 ({n_drop})，返回空数组。")
             col_data = np.array([])
@@ -142,22 +144,17 @@ def extract_time(filename: str) -> np.ndarray:
     """
     # 读取数据文件
     abs_file = os.path.abspath(filename)
-    
-    if abs_file in _file_cache:
-        # 从缓存读取
-        df = _read_data_file(abs_file)
-    else:
-        df = _read_data_file(abs_file)
+    df = _read_data_file(abs_file)
     
     # 提取 TIME 列（字符串格式）
     time_str = df['TIME'].astype(str)
     
     # 截取头尾
     n_total = len(time_str)
-    n_drop = _trim_head + _trim_tail
+    n_drop = TRIM_HEAD + TRIM_TAIL
     
     if n_total >= n_drop:
-        time_str = time_str.iloc[_trim_head:n_total - _trim_tail]
+        time_str = time_str.iloc[TRIM_HEAD:n_total - TRIM_TAIL]
     else:
         print(f"警告: 数据长度 ({n_total}) 小于需截取的长度 ({n_drop})，返回空数组。")
         return np.array([], dtype='timedelta64[ns]')
@@ -190,12 +187,13 @@ def extract_column_efficient(filename: str, col_name: str,
     # 构建缓存键
     abs_file = os.path.abspath(filename)
     cache_key = f"{abs_file}|{col_name}|{col_type}"
-    
-    if cache_key in _file_cache:
-        df = _file_cache[cache_key]
-    else:
-        df = _read_data_file(abs_file)
-        _file_cache[cache_key] = df
+
+    with _file_cache_lock:
+        if cache_key in _file_cache:
+            df = _file_cache[cache_key]
+        else:
+            df = _read_data_file(abs_file)
+            _file_cache[cache_key] = df
     
     # 检查列是否存在
     if col_name not in df.columns:
@@ -210,10 +208,10 @@ def extract_column_efficient(filename: str, col_name: str,
     
     # 截取头尾
     n_total = len(data)
-    n_drop = _trim_head + _trim_tail
+    n_drop = TRIM_HEAD + TRIM_TAIL
     
     if n_total >= n_drop:
-        data = data[_trim_head:n_total - _trim_tail]
+        data = data[TRIM_HEAD:n_total - TRIM_TAIL]
     else:
         print(f"警告: 数据长度 ({n_total}) 小于需截取的长度 ({n_drop})，返回空数组。")
         data = np.array([])

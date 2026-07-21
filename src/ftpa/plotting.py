@@ -1,8 +1,4 @@
-"""
-可视化模块
-对应 MATLAB: PlotFigure/ 目录下的所有函数
-提供时间序列绘图、交互绘图和航线轨迹绘图功能
-"""
+"""Visualization module."""
 
 import os
 import numpy as np
@@ -12,9 +8,17 @@ from .time_utils import select_time_window, format_time_seconds
 from .statistics import find_crossing_points
 from typing import Optional, Callable
 
+_FONT_CONFIGURED = False
+_FONT_CACHED = None
+
 
 def _configure_display_font():
-    """配置中文字体，优先使用系统可用字体，并提供回退。"""
+    """Configure CJK font once, lazily."""
+    global _FONT_CONFIGURED, _FONT_CACHED
+    if _FONT_CONFIGURED:
+        return _FONT_CACHED
+    _FONT_CONFIGURED = True
+
     preferred_fonts = [
         'Microsoft YaHei',
         'SimHei',
@@ -43,10 +47,8 @@ def _configure_display_font():
     plt.rcParams['font.family'] = 'sans-serif'
     plt.rcParams['font.sans-serif'] = [selected_font, 'DejaVu Sans', 'Arial']
     plt.rcParams['axes.unicode_minus'] = False
+    _FONT_CACHED = selected_font
     return selected_font
-
-
-_configure_display_font()
 
 
 def plot_time_signals(time_vec, signals, labels, time_range=None):
@@ -204,10 +206,10 @@ def _plot_core_interactive(time_vec, signals, labels, stats_func=None):
         labels: 标签列表
         stats_func: 可选统计函数
     """
-    from .time_utils import _time_to_seconds_array
-    
+    from .time_utils import time_to_seconds_array
+
     # 转换为数值秒用于交互
-    time_sec = _time_to_seconds_array(time_vec)
+    time_sec = time_to_seconds_array(time_vec)
     n_signals = len(labels)
     
     # 创建图形
@@ -402,11 +404,11 @@ def compute_window_stats(time_vec, signals, labels, t_start, t_end):
     返回:
         stats: 统计信息字典列表
     """
-    from .time_utils import _time_to_seconds_array, _parse_time_to_seconds
-    
-    time_sec = _time_to_seconds_array(time_vec)
-    t_start_sec = _parse_time_to_seconds(t_start)
-    t_end_sec = _parse_time_to_seconds(t_end)
+    from .time_utils import time_to_seconds_array, parse_time_to_seconds
+
+    time_sec = time_to_seconds_array(time_vec)
+    t_start_sec = parse_time_to_seconds(t_start)
+    t_end_sec = parse_time_to_seconds(t_end)
     
     idx = (time_sec >= t_start_sec) & (time_sec <= t_end_sec)
     

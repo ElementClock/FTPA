@@ -10,9 +10,9 @@ from typing import Dict, Union, Optional
 from datetime import datetime
 
 
-def export_data(data: Dict[str, np.ndarray], 
+def export_data(data: Dict[str, np.ndarray],
                 output_path: str,
-                format: str = 'csv',
+                output_format: str = 'csv',
                 time_format: str = 'string',
                 compression: Optional[str] = None) -> str:
     """
@@ -41,34 +41,34 @@ def export_data(data: Dict[str, np.ndarray],
     df = _data_to_dataframe(data, time_format)
     
     # 根据格式导出
-    format = format.lower()
-    
-    if format == 'csv':
+    output_format = output_format.lower()
+
+    if output_format == 'csv':
         file_path = f"{output_path}.csv"
         df.to_csv(file_path, index=False, compression=compression)
-        
-    elif format == 'parquet':
+
+    elif output_format == 'parquet':
         file_path = f"{output_path}.parquet"
         # parquet 不支持所有压缩方式，使用默认
         df.to_parquet(file_path, compression=compression or 'snappy')
-        
-    elif format == 'hdf5':
+
+    elif output_format == 'hdf5':
         file_path = f"{output_path}.h5"
         # HDF5 需要指定 key
-        df.to_hdf(file_path, key='data', mode='w', complevel=9 if compression else 0)
-        
-    elif format == 'excel':
+        df.to_hdf(file_path, key='data', mode='w', complevel=6 if compression else 0)
+
+    elif output_format == 'excel':
         file_path = f"{output_path}.xlsx"
         # Excel 不支持超过 1,048,576 行
         if len(df) > 1048576:
             raise ValueError(f"数据行数 {len(df)} 超过 Excel 限制 1,048,576 行")
         df.to_excel(file_path, index=False)
-        
+
     else:
-        raise ValueError(f"不支持的导出格式: {format}。支持: csv, parquet, hdf5, excel")
-    
+        raise ValueError(f"不支持的导出格式: {output_format}。支持: csv, parquet, hdf5, excel")
+
     print(f"数据已导出到: {file_path}")
-    print(f"  格式: {format.upper()}")
+    print(f"  格式: {output_format.upper()}")
     print(f"  行数: {len(df)}")
     print(f"  列数: {len(df.columns)}")
     if compression:
@@ -133,37 +133,37 @@ def _timedelta_to_string(time_array: np.ndarray) -> np.ndarray:
     return np.array(result)
 
 
-def export_statistics(stats: Dict, output_path: str, format: str = 'csv') -> str:
+def export_statistics(stats: Dict, output_path: str, output_format: str = 'csv') -> str:
     """
     导出统计结果
-    
+
     参数:
         stats: 统计结果字典
         output_path: 输出文件路径（不含扩展名）
-        format: 导出格式，'csv' 或 'json'
-    
+        output_format: 导出格式，'csv' 或 'json'
+
     返回:
         实际保存的文件路径
     """
     output_dir = os.path.dirname(output_path)
     if output_dir and not os.path.exists(output_dir):
         os.makedirs(output_dir)
-    
-    format = format.lower()
-    
-    if format == 'csv':
+
+    output_format = output_format.lower()
+
+    if output_format == 'csv':
         file_path = f"{output_path}_stats.csv"
         df = pd.DataFrame(stats)
         df.to_csv(file_path, index=False, encoding='utf-8-sig')
-        
-    elif format == 'json':
+
+    elif output_format == 'json':
         file_path = f"{output_path}_stats.json"
         import json
         with open(file_path, 'w', encoding='utf-8') as f:
             json.dump(stats, f, ensure_ascii=False, indent=2)
-            
+
     else:
-        raise ValueError(f"不支持的格式: {format}。支持: csv, json")
+        raise ValueError(f"不支持的格式: {output_format}。支持: csv, json")
     
     print(f"统计结果已导出到: {file_path}")
     return file_path

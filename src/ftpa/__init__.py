@@ -19,7 +19,7 @@ from .statistics import (
     crossing_analysis
 )
 from .plotting import plot_time_signals, plot_time_signals_interactive, plot_track
-from .time_utils import select_time_window, format_time_seconds
+from .time_utils import select_time_window, format_time_seconds, parse_time_to_seconds, time_to_seconds_array
 from .utils import make_valid_name, column_to_field_name
 from .exporter import (
     export_data,

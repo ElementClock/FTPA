@@ -28,7 +28,7 @@ class TestExporter:
         }
         
         output_path = str(tmp_path / 'test_output')
-        result_path = export_data(data, output_path, format='csv')
+        result_path = export_data(data, output_path, output_format='csv')
         
         assert os.path.exists(result_path)
         assert result_path.endswith('.csv')
@@ -58,7 +58,7 @@ class TestExporter:
         }
         
         output_path = str(tmp_path / 'test_output')
-        result_path = export_data(data, output_path, format='hdf5')
+        result_path = export_data(data, output_path, output_format='hdf5')
         
         assert os.path.exists(result_path)
         assert result_path.endswith('.h5')
@@ -72,7 +72,7 @@ class TestExporter:
         
         output_path = str(tmp_path / 'test_output')
         with pytest.raises(ValueError, match="不支持的导出格式"):
-            export_data(data, output_path, format='invalid')
+            export_data(data, output_path, output_format='invalid')
     
     def test_generate_data_summary(self):
         """测试生成数据摘要"""
@@ -127,7 +127,7 @@ class TestExporter:
         }
         
         output_path = str(tmp_path / 'stats_output')
-        result_path = export_statistics(stats, output_path, format='csv')
+        result_path = export_statistics(stats, output_path, output_format='csv')
         
         assert os.path.exists(result_path)
         assert result_path.endswith('_stats.csv')
@@ -140,7 +140,7 @@ class TestExporter:
         }
         
         output_path = str(tmp_path / 'stats_output')
-        result_path = export_statistics(stats, output_path, format='json')
+        result_path = export_statistics(stats, output_path, output_format='json')
         
         assert os.path.exists(result_path)
         assert result_path.endswith('_stats.json')

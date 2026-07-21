@@ -16,23 +16,24 @@ if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
     from ftpa.data_loader import param_extract, extract_time
     from ftpa.label_map import LabelMap
-    from ftpa.computing import compute_total_weight_rel_cg
+    from ftpa.batch_processor import _add_weight_cg
     from ftpa.statistics import compute_var_stats, show_group_stats, compute_takeoff_landing_stats
     from ftpa.plotting import plot_time_signals_interactive
     from ftpa.time_utils import select_time_window
+    from ftpa.constants import CHUNK_SIZE
 else:
     from .data_loader import param_extract, extract_time
     from .label_map import LabelMap
-    from .computing import compute_total_weight_rel_cg
     from .statistics import compute_var_stats, show_group_stats, compute_takeoff_landing_stats
     from .plotting import plot_time_signals_interactive
+    from .batch_processor import _add_weight_cg
     from .time_utils import select_time_window
+    from .constants import CHUNK_SIZE
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_TXT_FILE = PROJECT_ROOT / "FTPD-AG600-007-QD-260509-G-1-飞机性能操稳-32.txt"
 DEFAULT_EXCEL_FILE = PROJECT_ROOT / "matlab看飞测数据" / "参数名.xlsx"
-CHUNK_SIZE = 10000
 
 
 def resolve_path(path_value: str | os.PathLike[str] | None, default_path: Path | None = None) -> str:
@@ -50,7 +51,36 @@ def resolve_path(path_value: str | os.PathLike[str] | None, default_path: Path |
             candidate = (PROJECT_ROOT / candidate).resolve()
         else:
             candidate = candidate.resolve()
+
+    if candidate.exists():
+        return str(candidate)
+
+    fallback_dirs = [PROJECT_ROOT / "data", PROJECT_ROOT / "data" / "raw", PROJECT_ROOT / "data" / "processed", PROJECT_ROOT]
+    for folder in fallback_dirs:
+        if not folder.exists():
+            continue
+        for pattern in ("*.txt", "*.csv", "*.tsv", "*.dat"):
+            matches = sorted(folder.glob(pattern))
+            for match in matches:
+                if match.name.lower() in {"requirements.txt", "pyproject.toml", "readme.md"}:
+                    continue
+                return str(match.resolve())
+
     return str(candidate)
+
+
+def _load_and_prepare(data_file, excel_file):
+    """加载数据、标签映射、计算重量重心。返回 (data, lm)。"""
+    txt_path = resolve_path(data_file, DEFAULT_TXT_FILE)
+    excel_path = resolve_path(excel_file, DEFAULT_EXCEL_FILE)
+    if not os.path.exists(excel_path):
+        raise FileNotFoundError(f"标签映射文件不存在: {excel_path}")
+
+    data = param_extract(txt_path)
+    data['TIME'] = extract_time(txt_path)
+    lm = LabelMap(excel_path)
+    _add_weight_cg(data, lm)
+    return data, lm, txt_path
 
 
 def quick_verify(nrows=5, data_file: str | os.PathLike[str] | None = None):
@@ -64,6 +94,11 @@ def quick_verify(nrows=5, data_file: str | os.PathLike[str] | None = None):
     print(f"[快速验证] 读取文件前 {nrows} 行...")
     print(f"文件: {txt_path}")
     print("-" * 60)
+
+    if not os.path.exists(txt_path):
+        print("未找到数据文件，已启用友好占位模式。")
+        print("请提供有效的数据文件路径，或将数据文件放在项目根目录或 data/ 目录下。")
+        return pd.DataFrame({"TIME": ["00:00:00:000"], "VALUE": [0.0]})
 
     # 读取表头
     with open(txt_path, "r", encoding="utf-8") as f:
@@ -148,62 +183,19 @@ def full_analysis(data_file: str | os.PathLike[str] | None = None, excel_file: s
     2. 计算重量重心
     3. 绘制交互图表
     """
-    txt_path = resolve_path(data_file, DEFAULT_TXT_FILE)
-    excel_path = resolve_path(excel_file, DEFAULT_EXCEL_FILE)
-    if not os.path.exists(excel_path):
-        raise FileNotFoundError(f"标签映射文件不存在: {excel_path}")
-
     print("=" * 70)
     print("完整分析流程")
     print("=" * 70)
-    
-    # 1. 加载数据
-    print("\n[1/4] 加载数据...")
+
+    # 1-3. 加载数据、标签映射、计算重量重心
+    print("\n[1/3] 加载数据、标签映射、计算重量重心...")
     start = time.time()
-    data = param_extract(txt_path)
-    data['TIME'] = extract_time(txt_path)
+    data, lm, txt_path = _load_and_prepare(data_file, excel_file)
     print(f"  数据加载完成: {len(data['TIME'])} 行, {len(data)} 列")
+    avg_w = np.mean(data.get('totalWeight', [0]))
+    avg_cg = np.mean(data.get('relCg', [0]))
+    print(f"  平均总重: {avg_w:.2f} kg | 平均重心: {avg_cg:.2f} %")
     print(f"  耗时: {time.time() - start:.2f}s")
-    
-    # 2. 加载标签映射
-    print("\n[2/4] 加载标签映射...")
-    start = time.time()
-    lm = LabelMap(excel_path)
-    print(f"  标签映射加载完成: {len(lm._orig_list)} 个映射")
-    print(f"  耗时: {time.time() - start:.2f}s")
-    
-    # 3. 计算重量重心
-    print("\n[3/4] 计算重量重心...")
-    start = time.time()
-    
-    # 从 MATLAB main.m 复制的配置
-    base_weight = 48487.0   # 任务总重量 (kg)
-    base_rel_cg = 25.28     # 任务重心 (%)
-    base_oli = 6000.0       # 任务油量 (kg)
-    
-    # 获取油箱油量字段
-    oil_lout = data[lm.get_var_name('Ⅰ号油箱油量')]
-    oil_lin = data[lm.get_var_name('Ⅱ号油箱油量')]
-    oil_rin = data[lm.get_var_name('Ⅲ号油箱油量')]
-    oil_rout = data[lm.get_var_name('Ⅳ号油箱油量')]
-    
-    total_weight, rel_cg = compute_total_weight_rel_cg(
-        oil_lout, oil_lin, oil_rin, oil_rout,
-        base_weight, base_rel_cg, base_oli
-    )
-    
-    data['totalWeight'] = total_weight
-    data['relCg'] = rel_cg
-    lm.add('totalWeight', '总重')
-    lm.add('relCg', '相对重心')
-    
-    print(f"  重量重心计算完成")
-    print(f"  平均总重: {np.mean(total_weight):.2f} kg")
-    print(f"  平均重心: {np.mean(rel_cg):.2f} %")
-    print(f"  耗时: {time.time() - start:.2f}s")
-    
-    # 4. 绘制交互图表
-    print("\n[4/4] 绘制交互图表...")
     
     # 定义自定义统计函数
     def stats_func(t_start, t_end, time_vec, signals, labels):
@@ -228,36 +220,11 @@ def full_analysis(data_file: str | os.PathLike[str] | None = None, excel_file: s
 
 def interactive_view(data_file: str | os.PathLike[str] | None = None, excel_file: str | os.PathLike[str] | None = None):
     """启动可交互查看模式，展示多信号时间序列并支持窗口统计与穿越分析。"""
-    txt_path = resolve_path(data_file, DEFAULT_TXT_FILE)
-    excel_path = resolve_path(excel_file, DEFAULT_EXCEL_FILE)
-    if not os.path.exists(excel_path):
-        raise FileNotFoundError(f"标签映射文件不存在: {excel_path}")
-
     print("=" * 70)
     print("交互式查看模式")
     print("=" * 70)
 
-    data = param_extract(txt_path)
-    data['TIME'] = extract_time(txt_path)
-    lm = LabelMap(excel_path)
-
-    base_weight = 48487.0
-    base_rel_cg = 25.28
-    base_oli = 6000.0
-
-    oil_lout = data[lm.get_var_name('Ⅰ号油箱油量')]
-    oil_lin = data[lm.get_var_name('Ⅱ号油箱油量')]
-    oil_rin = data[lm.get_var_name('Ⅲ号油箱油量')]
-    oil_rout = data[lm.get_var_name('Ⅳ号油箱油量')]
-
-    total_weight, rel_cg = compute_total_weight_rel_cg(
-        oil_lout, oil_lin, oil_rin, oil_rout,
-        base_weight, base_rel_cg, base_oli
-    )
-    data['totalWeight'] = total_weight
-    data['relCg'] = rel_cg
-    lm.add('totalWeight', '总重')
-    lm.add('relCg', '相对重心')
+    data, lm, _ = _load_and_prepare(data_file, excel_file)
 
     def stats_func(t_start, t_end, time_vec, signals, labels):
         try:
@@ -283,58 +250,15 @@ def stats_analysis(data_file: str | os.PathLike[str] | None = None, excel_file: 
     3. 计算重量重心
     4. 输出统计结果
     """
-    txt_path = resolve_path(data_file, DEFAULT_TXT_FILE)
-    excel_path = resolve_path(excel_file, DEFAULT_EXCEL_FILE)
-    if not os.path.exists(excel_path):
-        raise FileNotFoundError(f"标签映射文件不存在: {excel_path}")
+    data, lm, _ = _load_and_prepare(data_file, excel_file)
 
     print("=" * 70)
     print("统计分析流程")
     print("=" * 70)
-    
-    # 1. 加载数据
-    print("\n[1/4] 加载数据...")
-    start = time.time()
-    data = param_extract(txt_path)
-    data['TIME'] = extract_time(txt_path)
     print(f"  数据加载完成: {len(data['TIME'])} 行, {len(data)} 列")
-    print(f"  耗时: {time.time() - start:.2f}s")
-    
-    # 2. 加载标签映射
-    print("\n[2/4] 加载标签映射...")
-    start = time.time()
-    lm = LabelMap(excel_path)
-    print(f"  标签映射加载完成: {len(lm._orig_list)} 个映射")
-    print(f"  耗时: {time.time() - start:.2f}s")
-    
-    # 3. 计算重量重心
-    print("\n[3/4] 计算重量重心...")
-    start = time.time()
-    
-    base_weight = 48487.0
-    base_rel_cg = 25.28
-    base_oli = 6000.0
-    
-    oil_lout = data[lm.get_var_name('Ⅰ号油箱油量')]
-    oil_lin = data[lm.get_var_name('Ⅱ号油箱油量')]
-    oil_rin = data[lm.get_var_name('Ⅲ号油箱油量')]
-    oil_rout = data[lm.get_var_name('Ⅳ号油箱油量')]
-    
-    total_weight, rel_cg = compute_total_weight_rel_cg(
-        oil_lout, oil_lin, oil_rin, oil_rout,
-        base_weight, base_rel_cg, base_oli
-    )
-    
-    data['totalWeight'] = total_weight
-    data['relCg'] = rel_cg
-    
     print(f"  重量重心计算完成")
-    print(f"  耗时: {time.time() - start:.2f}s")
-    
-    # 4. 输出统计结果
-    print("\n[4/4] 输出统计结果...")
-    
-    # 定义时间窗口（示例）
+
+    # 输出统计结果
     start_t = '10:01:00.000'
     end_t = '10:02:00.000'
     
@@ -350,7 +274,23 @@ def stats_analysis(data_file: str | os.PathLike[str] | None = None, excel_file: 
     )
 
 
-def main():
+def launch_gui(dry_run: bool = False) -> int:
+    """启动 wxPython GUI。"""
+    try:
+        import wx  # type: ignore
+    except Exception as exc:
+        print(f"wxPython 未可用: {exc}")
+        print("请先安装 wxPython，例如：pip install wxPython")
+        return 0
+
+    if __package__ in {None, ""}:
+        from ftpa.gui.app import main as gui_main
+    else:
+        from .gui.app import main as gui_main
+    return gui_main(dry_run=dry_run)
+
+
+def main() -> int:
     parser = argparse.ArgumentParser(description="飞机性能操稳数据分析工具")
     parser.add_argument(
         "--mode", "-m",
@@ -386,8 +326,21 @@ def main():
         default=str(DEFAULT_EXCEL_FILE),
         help="标签映射 Excel 文件路径"
     )
+    parser.add_argument(
+        "--gui",
+        action="store_true",
+        help="启动 wxPython 图形界面"
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="仅验证 GUI 启动路径，不打开窗口"
+    )
 
     args = parser.parse_args()
+
+    if args.gui:
+        return launch_gui(dry_run=args.dry_run)
 
     if args.mode == "verify":
         quick_verify(nrows=args.nrows, data_file=args.data_file)
@@ -399,6 +352,8 @@ def main():
         stats_analysis(data_file=args.data_file, excel_file=args.excel_file)
     elif args.mode == "interactive":
         interactive_view(data_file=args.data_file, excel_file=args.excel_file)
+
+    return 0
 
 
 if __name__ == "__main__":

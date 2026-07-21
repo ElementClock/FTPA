@@ -237,12 +237,12 @@ def compute_takeoff_landing_stats(t_start, t_end, data: dict, lm) -> str:
         stats_str: 统计结果字符串
     """
     # 获取 time 向量并转为数值秒
-    from .time_utils import _time_to_seconds_array, _parse_time_to_seconds
-    
+    from .time_utils import time_to_seconds_array, parse_time_to_seconds
+
     t_vec = data['TIME']
-    t_vec_sec = _time_to_seconds_array(t_vec)
-    t_start_sec = _parse_time_to_seconds(t_start)
-    t_end_sec = _parse_time_to_seconds(t_end)
+    t_vec_sec = time_to_seconds_array(t_vec)
+    t_start_sec = parse_time_to_seconds(t_start)
+    t_end_sec = parse_time_to_seconds(t_end)
     
     # 窗口索引
     idx = np.where((t_vec_sec >= t_start_sec) & (t_vec_sec <= t_end_sec))[0]
@@ -459,6 +459,7 @@ def crossing_analysis(data: dict, lm, signal_ids: list, mode: str,
             continue
         
         val = other_sig[idx]
-        lines.append(f'    {display_name} = {val[cross_idx_local]:.2f}')
+        cross_idx = cross_idx_local - 1  # convert from 1-based to 0-based
+        lines.append(f'    {display_name} = {val[cross_idx]:.2f}')
     
     return lines

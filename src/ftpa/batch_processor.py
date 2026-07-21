@@ -13,6 +13,7 @@ import numpy as np
 from .data_loader import param_extract, extract_time
 from .label_map import LabelMap
 from .computing import compute_total_weight_rel_cg
+from .constants import BASE_WEIGHT, BASE_REL_CG, BASE_OIL
 from .exporter import export_data, generate_data_summary
 
 
@@ -93,7 +94,7 @@ def batch_process_files(file_pattern: str,
                 custom_result = process_func(data, lm, file_info)
             
             # 导出数据
-            actual_path = export_data(data, output_path, format=export_format)
+            actual_path = export_data(data, output_path, output_format=export_format)
             
             # 记录结果
             result_item = {
@@ -284,7 +285,7 @@ def batch_export_summaries(file_pattern: str,
             }
             
             # 添加一些关键通道的统计
-            key_channels = ['总重', '相对重心', '指示空速表决值']
+            key_channels = ['totalWeight', 'relCg', 'AirSpeed_vote']
             for channel in key_channels:
                 if channel in summary['channels']:
                     stats = summary['channels'][channel]
@@ -312,11 +313,8 @@ def _add_weight_cg(data: Dict, lm: LabelMap):
         data: 数据字典
         lm: 标签映射对象
     """
-    # 默认配置（可根据实际情况调整）
-    base_weight = 48487.0
-    base_rel_cg = 25.28
-    base_oli = 6000.0
-    
+    # 默认配置（从 constants.py 读取）
+
     try:
         # 获取油箱油量
         oil_lout = data.get(lm.get_var_name('Ⅰ号油箱油量'))
@@ -327,7 +325,7 @@ def _add_weight_cg(data: Dict, lm: LabelMap):
         if all(v is not None for v in [oil_lout, oil_lin, oil_rin, oil_rout]):
             total_weight, rel_cg = compute_total_weight_rel_cg(
                 oil_lout, oil_lin, oil_rin, oil_rout,
-                base_weight, base_rel_cg, base_oli
+                BASE_WEIGHT, BASE_REL_CG, BASE_OIL
             )
             
             data['totalWeight'] = total_weight
@@ -337,5 +335,4 @@ def _add_weight_cg(data: Dict, lm: LabelMap):
             lm.add('totalWeight', '总重')
             lm.add('relCg', '相对重心')
     except Exception as e:
-        # 如果计算失败，静默跳过
-        pass
+        print(f"警告: 重量重心计算失败: {e}")

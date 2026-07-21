@@ -9,7 +9,7 @@ import pandas as pd
 from typing import Union
 
 
-def _parse_time_to_seconds(t) -> float:
+def parse_time_to_seconds(t) -> float:
     """
     将各种时间格式统一转换为数值秒
     
@@ -38,7 +38,7 @@ def _parse_time_to_seconds(t) -> float:
         raise TypeError(f"无法将 {type(t)} 转换为数值秒")
 
 
-def _time_to_seconds_array(time_vec) -> np.ndarray:
+def time_to_seconds_array(time_vec) -> np.ndarray:
     """
     将时间向量统一转换为数值秒数组
     
@@ -55,7 +55,7 @@ def _time_to_seconds_array(time_vec) -> np.ndarray:
         return time_vec.astype(np.float64)
     else:
         # 尝试逐元素转换
-        return np.array([_parse_time_to_seconds(t) for t in time_vec], dtype=np.float64)
+        return np.array([parse_time_to_seconds(t) for t in time_vec], dtype=np.float64)
 
 
 def select_time_window(time_vec, t_start, t_end):
@@ -76,9 +76,9 @@ def select_time_window(time_vec, t_start, t_end):
         - t_end_actual: 实际结束时间（TIME 中离 t_end 最近的点）
     """
     # 转换为数值秒
-    time_sec = _time_to_seconds_array(time_vec)
-    t_start_sec = _parse_time_to_seconds(t_start)
-    t_end_sec = _parse_time_to_seconds(t_end)
+    time_sec = time_to_seconds_array(time_vec)
+    t_start_sec = parse_time_to_seconds(t_start)
+    t_end_sec = parse_time_to_seconds(t_end)
     
     # 找到最近的索引
     i_start = np.argmin(np.abs(time_sec - t_start_sec))
