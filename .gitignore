@@ -1,0 +1,61 @@
+# 数据文件
+FTPD-AG600-007-QD-260509-G-1-飞机性能操稳-32.txt
+data/raw/
+data/processed/
+data/results/
+
+# Python 虚拟环境
+.venv/
+venv/
+env/
+
+# Python 编译产物
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+*.egg
+
+# 日志文件
+*.log
+logs/
+
+# 环境变量
+.env
+
+# 编辑器
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+*.sublime-project
+*.sublime-workspace
+
+# 临时文件
+*.tmp
+*.temp
+*.bak
+*.cache
+
+# 测试和覆盖率
+.pytest_cache/
+htmlcov/
+.coverage
+.coverage.*
+
+# Jupyter Notebook
+.ipynb_checkpoints/
+
+# 操作系统
+.DS_Store
+Thumbs.db
+
+# 项目特定
+*.mat
+*.xlsx
+*.xls
+*.m
