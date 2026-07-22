@@ -2,6 +2,18 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Principles
+
+Start from first principles and the essence of the original requirements — not from convention or templates.
+
+1. **Don't assume I know what I want.** When motivation or goals are unclear, stop and discuss.
+2. **Always take the shortest path.** If the goal is clear but the path isn't the shortest, tell me and suggest a better way.
+3. **Find root causes, don't apply patches.** Every decision must answer "why".
+4. **Output the essentials.** Cut everything that doesn't change a decision.
+5. **SRP (Single Responsibility)** — One function, one module, one reason to change.
+6. **KISS / DRY / YAGNI** — Keep it simple, don't repeat yourself, only build what's needed now.
+7. **High cohesion, low coupling** — Modules communicate through stable interfaces, not internal data.
+
 ## Commands
 
 ```bash

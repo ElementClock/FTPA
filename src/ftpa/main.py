@@ -275,12 +275,12 @@ def stats_analysis(data_file: str | os.PathLike[str] | None = None, excel_file: 
 
 
 def launch_gui(dry_run: bool = False) -> int:
-    """启动 wxPython GUI。"""
+    """启动 PySide6 Qt GUI。"""
     try:
-        import wx  # type: ignore
+        from PySide6 import QtWidgets  # noqa: F401
     except Exception as exc:
-        print(f"wxPython 未可用: {exc}")
-        print("请先安装 wxPython，例如：pip install wxPython")
+        print(f"PySide6 未可用: {exc}")
+        print("请先安装 PySide6，例如：pip install PySide6")
         return 0
 
     if __package__ in {None, ""}:
@@ -295,7 +295,7 @@ def main() -> int:
     parser.add_argument(
         "--mode", "-m",
         choices=["verify", "chunked", "analysis", "stats", "interactive"],
-        default="verify",
+        default=None,
         help="运行模式: verify=快速验证, chunked=分块读取, analysis=完整分析, stats=统计分析, interactive=交互式查看"
     )
     parser.add_argument(
@@ -339,7 +339,8 @@ def main() -> int:
 
     args = parser.parse_args()
 
-    if args.gui:
+    # 默认启动 GUI（无参数或仅 --gui）
+    if args.gui or args.mode is None:
         return launch_gui(dry_run=args.dry_run)
 
     if args.mode == "verify":

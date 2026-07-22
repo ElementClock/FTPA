@@ -1,1 +1,1 @@
-"""wxPython GUI package for FTPA."""
+"""PySide6 GUI package for FTPA."""

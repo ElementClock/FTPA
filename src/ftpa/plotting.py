@@ -20,6 +20,7 @@ def _configure_display_font():
     _FONT_CONFIGURED = True
 
     preferred_fonts = [
+        'Microsoft YaHei Light',
         'Microsoft YaHei',
         'SimHei',
         'Arial Unicode MS',

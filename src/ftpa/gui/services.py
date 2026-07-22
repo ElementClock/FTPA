@@ -1,196 +1,221 @@
+"""
+DataContext —— 核心数据模型，桥接所有 CLI 模块到 GUI 面板。
+单一实例，所有 Tab 共享。
+"""
+
+from __future__ import annotations
+
 import os
 from pathlib import Path
 
 import numpy as np
-import pandas as pd
 
-from ..main import DEFAULT_EXCEL_FILE, DEFAULT_TXT_FILE, resolve_path
-from ..data_loader import param_extract, extract_time
+from ..batch_processor import _add_weight_cg
+from ..computing import compute_fitted_circle_radius
+from ..constants import BASE_OIL, BASE_REL_CG, BASE_WEIGHT
+from ..data_loader import extract_time, param_extract
+from ..exporter import (
+    export_data,
+    export_statistics,
+    generate_data_summary,
+    print_data_summary,
+)
 from ..label_map import LabelMap
-from ..computing import compute_total_weight_rel_cg
-from ..constants import BASE_WEIGHT, BASE_REL_CG, BASE_OIL
+from ..statistics import (
+    compute_takeoff_landing_stats,
+    crossing_analysis,
+    statistics_params,
+)
+from ..time_utils import time_to_seconds_array
 from ..utils import column_to_field_name
 
+DATA_DIRS = [
+    Path(__file__).resolve().parents[2],  # project root
+    Path(__file__).resolve().parents[2] / "data",
+    Path(__file__).resolve().parents[2] / "data" / "raw",
+    Path(__file__).resolve().parents[2] / "matlab",
+]
 
-def build_analysis_preview(data_path=None, excel_path=None, selected_signals=None):
-    """Build a lightweight preview structure for the GUI to display."""
-    data_path = resolve_path(data_path, DEFAULT_TXT_FILE)
-    excel_path = resolve_path(excel_path, DEFAULT_EXCEL_FILE)
 
-    preview_df = pd.DataFrame({
-        "TIME": ["00:00:00:000", "00:00:01:000", "00:00:02:000"],
-        "signal_a": [0.0, 1.0, 2.0],
-        "signal_b": [1.0, 2.0, 3.0],
-        "signal_c": [0.5, 1.5, 2.5],
-    })
+class DataContext:
+    """统一数据上下文，持有加载的数据和标签映射。"""
 
-    if os.path.exists(data_path) and data_path.lower().endswith((".txt", ".csv", ".tsv", ".dat")):
-        if data_path.lower().endswith(".txt"):
-            preview_df = pd.read_csv(data_path, sep="\t", nrows=20, dtype={0: str}, low_memory=False)
-        else:
-            preview_df = pd.read_csv(data_path, sep=",", nrows=20, dtype={0: str}, low_memory=False)
-        if preview_df.empty:
-            preview_df = pd.DataFrame({
-                "TIME": ["00:00:00:000"],
-                "signal_a": [0.0],
-                "signal_b": [1.0],
-                "signal_c": [0.5],
-            })
+    def __init__(self):
+        self.data_path: str = ""
+        self.excel_path: str = ""
+        self.data: dict = {}
+        self.lm: LabelMap | None = None
+        self.time_vec: np.ndarray | None = None
+        self.time_sec: np.ndarray | None = None
+        self._loaded = False
 
-    selected = selected_signals or list(preview_df.columns[:3])
-    available = [col for col in selected if col in preview_df.columns]
-    if not available:
-        available = list(preview_df.columns[:2])
+    @staticmethod
+    def resolve_path(path_value: str | os.PathLike[str] | None, default: str = "") -> str:
+        """解析文件路径，相对路径自动搜寻已知目录。"""
+        if not path_value:
+            return default
+        p = Path(path_value)
+        if p.is_absolute() and p.exists():
+            return str(p.resolve())
+        for base in DATA_DIRS:
+            candidate = (base / p).resolve()
+            if candidate.exists():
+                return str(candidate)
+        return str(p.resolve())
 
-    summary_lines = [
-        f"数据文件：{data_path}",
-        f"样本行数：{len(preview_df)}",
-        f"样本列数：{len(preview_df.columns)}",
-        f"已选择信号：{', '.join(available)}",
-    ]
+    def load(self, data_path: str, excel_path: str) -> bool:
+        """加载数据和标签映射。返回 True 表示成功。"""
+        self.data_path = data_path
+        self.excel_path = excel_path
 
-    plot_series = []
-    plot_labels = []
-    for name in available:
+        if not os.path.exists(data_path):
+            self._loaded = False
+            return False
+
         try:
-            series = pd.to_numeric(preview_df[name], errors="coerce").fillna(0.0).to_numpy()
+            raw = param_extract(data_path)
+            raw["TIME"] = extract_time(data_path)
+            self.data = raw
+            self.time_vec = raw["TIME"]
+            self.time_sec = time_to_seconds_array(self.time_vec)
+
+            if os.path.exists(excel_path):
+                try:
+                    self.lm = LabelMap(excel_path)
+                    _add_weight_cg(self.data, self.lm)
+                except Exception:
+                    self.lm = None
+            else:
+                self.lm = None
+
+            self._loaded = True
+            return True
         except Exception:
-            series = np.zeros(len(preview_df), dtype=float)
-        plot_series.append(series)
-        plot_labels.append(name)
+            self._loaded = False
+            return False
 
-    return {
-        "row_count": len(preview_df),
-        "column_count": len(preview_df.columns),
-        "summary_lines": summary_lines,
-        "plot_series": plot_series,
-        "plot_labels": plot_labels,
-        "data_frame": preview_df,
-    }
+    @property
+    def is_loaded(self) -> bool:
+        return self._loaded
 
+    # -- 字段管理 --
 
-def get_data_fields(data_path=None):
-    data_path = resolve_path(data_path, DEFAULT_TXT_FILE)
-    if os.path.exists(data_path):
-        try:
-            with open(data_path, "r", encoding="utf-8") as fh:
-                header = fh.readline().strip()
-            fields = [item for item in header.split("\t") if item]
-            return fields
-        except Exception:
-            pass
+    def get_field_names(self) -> list[str]:
+        """所有字段名（不包括 TIME）。"""
+        if not self.data:
+            return []
+        return [k for k in self.data if k != "TIME"]
 
-    return [
-        "TIME",
-        "无线电高度表决值",
-        "指示空速表决值",
-        "俯仰角表决值",
-        "法向过载_I1",
-        "总重",
-        "相对重心",
-    ]
+    def get_field_labels(self) -> dict[str, str]:
+        """字段名 → 中文标签。"""
+        result: dict[str, str] = {}
+        for field in self.get_field_names():
+            if self.lm is not None:
+                try:
+                    result[field] = self.lm.get_label(field)
+                except Exception:
+                    result[field] = field
+            else:
+                result[field] = field
+        return result
 
+    def get_label(self, field_name: str) -> str:
+        return self.get_field_labels().get(field_name, field_name)
 
-def run_analysis(data_path=None, excel_path=None, selected_signals=None):
-    data_path = resolve_path(data_path, DEFAULT_TXT_FILE)
-    excel_path = resolve_path(excel_path, DEFAULT_EXCEL_FILE)
+    def resolve_field(self, signal_id: str) -> str | None:
+        """将中文标签或字段名解析为 data 中的字段名。"""
+        if signal_id in self.data:
+            return signal_id
+        if self.lm is not None:
+            f = self.lm.get_var_name(signal_id)
+            if f and f in self.data:
+                return f
+        cf = column_to_field_name(signal_id)
+        if cf in self.data:
+            return cf
+        return None
 
-    if not os.path.exists(data_path):
-        preview = build_analysis_preview(
-            data_path=data_path,
-            excel_path=excel_path,
-            selected_signals=selected_signals,
-        )
-        preview["summary_lines"].insert(0, f"数据文件不存在: {data_path}")
-        return preview
+    # -- 绘图数据 --
 
-    data = param_extract(data_path)
-    data["TIME"] = extract_time(data_path)
+    def get_plot_data(self, signal_ids: list[str]) -> tuple[np.ndarray, np.ndarray, list[str]]:
+        """返回 (time_sec, NxM signals_matrix, labels)。"""
+        if not self._loaded or self.time_sec is None:
+            return np.array([], dtype=float), np.empty((0, 0)), []
 
-    lm = None
-    if os.path.exists(excel_path):
-        try:
-            lm = LabelMap(excel_path)
-        except Exception:
-            lm = None
+        fields: list[str] = []
+        labels: list[str] = []
+        for sid in signal_ids:
+            f = self.resolve_field(sid)
+            if f is not None:
+                fields.append(f)
+                labels.append(self.get_label(f))
 
-    try:
-        if lm is not None:
-            oil_lout = data[lm.get_var_name("Ⅰ号油箱油量")]
-            oil_lin = data[lm.get_var_name("Ⅱ号油箱油量")]
-            oil_rin = data[lm.get_var_name("Ⅲ号油箱油量")]
-            oil_rout = data[lm.get_var_name("Ⅳ号油箱油量")]
-            total_weight, rel_cg = compute_total_weight_rel_cg(
-                oil_lout,
-                oil_lin,
-                oil_rin,
-                oil_rout,
-                BASE_WEIGHT,
-                BASE_REL_CG,
-                BASE_OIL,
-            )
-            data["totalWeight"] = total_weight
-            data["relCg"] = rel_cg
-            lm.add("totalWeight", "总重")
-            lm.add("relCg", "相对重心")
-    except Exception as e:
-        print(f"GUI: 重量重心计算跳过: {e}")
+        if not fields:
+            # fallback: 取前 3 个信号
+            names = self.get_field_names()[:3]
+            for f in names:
+                fields.append(f)
+                labels.append(self.get_label(f))
 
-    selected_signals = selected_signals or []
-    chosen = []
-    for signal in selected_signals:
-        field_name = None
-        if signal in data:
-            field_name = signal
-        elif lm is not None:
-            field_name = lm.get_var_name(signal)
-        if field_name is None or field_name not in data:
-            field_name = column_to_field_name(signal)
-        if field_name in data:
-            label = lm.get_label(field_name) if lm is not None else signal
-            chosen.append((field_name, label))
+        n = len(self.time_sec)
+        m = len(fields)
+        signals = np.zeros((n, m), dtype=float)
+        for i, f in enumerate(fields):
+            col = self.data.get(f)
+            if col is not None:
+                signals[:, i] = np.asarray(col, dtype=float)
+        return self.time_sec, signals, labels
 
-    if not chosen:
-        default_choices = [
-            "无线电高度表决值",
-            "指示空速表决值",
-            "俯仰角表决值",
-            "法向过载_I1",
-        ]
-        for choice in default_choices:
-            if lm is not None:
-                field_name = lm.get_var_name(choice)
-                if field_name in data:
-                    chosen.append((field_name, choice))
-        if not chosen:
-            for key in data.keys():
-                if key != "TIME":
-                    chosen.append((key, key))
-                if len(chosen) >= 3:
-                    break
+    # -- 统计 --
 
-    plot_series = []
-    plot_labels = []
-    for field_name, label in chosen:
-        series = data[field_name]
-        if not isinstance(series, np.ndarray):
-            series = np.asarray(series)
-        plot_series.append(series)
-        plot_labels.append(label)
+    def compute_parameter_stats(self, t_start, t_end, signal_ids: list[str]) -> list[str]:
+        if not self._loaded or self.lm is None:
+            return ["数据未加载"]
+        return statistics_params(t_start, t_end, self.data, self.lm, signal_ids)
 
-    summary_lines = [
-        f"数据文件：{data_path}",
-        f"标签文件：{excel_path if os.path.exists(excel_path) else '未找到'}",
-        f"样本行数：{len(data['TIME'])}",
-        f"样本列数：{len(data)}",
-        f"分析信号：{', '.join(plot_labels)}",
-    ]
+    def compute_crossing_analysis(
+        self, signal_ids: list[str], mode: str, threshold: float, t_start, t_end
+    ) -> list[str]:
+        if not self._loaded or self.lm is None:
+            return ["数据未加载"]
+        return crossing_analysis(self.data, self.lm, signal_ids, mode, threshold, t_start, t_end)
 
-    return {
-        "row_count": len(data["TIME"]),
-        "column_count": len(data),
-        "summary_lines": summary_lines,
-        "plot_series": plot_series,
-        "plot_labels": plot_labels,
-        "data_frame": None,
-    }
+    def compute_takeoff_landing_stats(self, t_start, t_end) -> str:
+        if not self._loaded:
+            return "数据未加载"
+        return compute_takeoff_landing_stats(t_start, t_end, self.data, self.lm)
+
+    # -- 拟合 --
+
+    def compute_fitted_circle(self, lon_field: str, lat_field: str, t_start, t_end) -> float:
+        if not self._loaded or self.time_vec is None:
+            return float("nan")
+        return compute_fitted_circle_radius(self.time_vec, t_start, t_end, self.data[lat_field], self.data[lon_field])
+
+    # -- 导出 --
+
+    def export_data(self, output_path: str, fmt: str, compression: str | None = None) -> str:
+        if not self._loaded:
+            raise RuntimeError("无数据可导出")
+        return export_data(self.data, output_path, fmt, compression=compression)
+
+    def export_statistics(self, stats: list, output_path: str, fmt: str = "csv") -> str:
+        return export_statistics(stats, output_path, fmt)
+
+    def generate_summary(self) -> dict:
+        if not self._loaded:
+            return {}
+        return generate_data_summary(self.data)
+
+    # -- 信息 --
+
+    def get_row_count(self) -> int:
+        return len(self.time_vec) if self.time_vec is not None else 0
+
+    def get_column_count(self) -> int:
+        return len(self.data) if self.data else 0
+
+    def get_time_range_sec(self) -> tuple[float, float]:
+        if self.time_sec is None or len(self.time_sec) < 2:
+            return 0.0, 0.0
+        return float(self.time_sec[0]), float(self.time_sec[-1])
