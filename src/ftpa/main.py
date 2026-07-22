@@ -4,6 +4,7 @@
 """
 
 import argparse
+import logging
 import os
 import sys
 import time
@@ -11,6 +12,8 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+
+logger = logging.getLogger(__name__)
 
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -291,6 +294,13 @@ def launch_gui(dry_run: bool = False) -> int:
 
 
 def main() -> int:
+    # 日志初始化（兼容无包名直接运行）
+    try:
+        from .log_utils import setup_logging
+    except ImportError:
+        from log_utils import setup_logging
+    setup_logging(log_file="ftpa.log")
+
     parser = argparse.ArgumentParser(description="飞机性能操稳数据分析工具")
     parser.add_argument(
         "--mode", "-m",

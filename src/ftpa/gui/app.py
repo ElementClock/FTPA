@@ -32,5 +32,10 @@ def main(dry_run: bool = False) -> int:
     from .main_window import MainWindow
 
     window = MainWindow(dry_run=dry_run)
+
+    # 安装 GUI 日志桥接：logging → info_display
+    from .log_handler import install_gui_logger
+    install_gui_logger(window._append_log)
+
     window.show()
     return app.exec()

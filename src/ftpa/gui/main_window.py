@@ -48,6 +48,9 @@ from .panel_plot import PlotCanvasWidget
 from .services import DataContext
 from .widgets import ParameterTreeWidget
 
+import logging
+logger = logging.getLogger(__name__)
+
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_TXT = PROJECT_ROOT / "FTPD-AG600-007-QD-260509-G-1-飞机性能操稳-32.txt"
@@ -363,6 +366,10 @@ class MainWindow(QMainWindow):
         """后台线程加载数据。"""
         from .worker import DataLoaderWorker, QThread
 
+        logger.info("开始加载: data_path=%s", data_path)
+        logger.info("  os.path.exists(data_path)=%s", os.path.exists(data_path))
+        logger.info("  excel_path=%s, os.path.exists(excel_path)=%s", excel_path, os.path.exists(excel_path))
+
         if not os.path.exists(data_path):
             QMessageBox.warning(self, "文件错误", f"数据文件不存在:\n{data_path}")
             return
@@ -381,26 +388,26 @@ class MainWindow(QMainWindow):
         self._load_thread.finished.connect(self._load_thread.deleteLater)
         self._load_thread.start()
 
-    def _on_load_finished(self, ok: bool, msg: str):
-        """数据加载完成回调。"""
-        if not ok:
+    def _on_load_finished(self, ctx, msg: str):
+        """数据加载完成回调。ctx 为 DataContext 对象或 None。"""
+        if ctx is None:
             self.status_bar.showMessage("加载失败")
             QMessageBox.critical(self, "加载失败", msg)
             return
 
-        # 从 Worker 获取路径
-        dp = getattr(self._load_worker, 'data_path', None) or \
-             getattr(self._load_worker, '_DataLoaderWorker__data_path', '')
-        ep = getattr(self._load_worker, 'excel_path', None) or \
-             getattr(self._load_worker, '_DataLoaderWorker__excel_path', '')
-
-        ctx = DataContext()
-        ctx.load(dp, ep)
         self._on_data_ready(ctx)
 
     def _on_data_ready(self, ctx: DataContext):
         """数据就绪，刷新界面。"""
         self.data_context = ctx
+
+        # 验证加载状态
+        if not ctx.is_loaded or not ctx.data:
+            QMessageBox.critical(self, "数据无效", "数据加载后为空，请检查文件格式。")
+            return
+
+        # 自动填充默认信号到第一个子图
+        self._auto_fill_subplots(ctx)
 
         # 填充参数树
         field_labels = ctx.get_field_labels()
@@ -429,3 +436,19 @@ class MainWindow(QMainWindow):
             f"信号数量: {len(ctx.get_field_names())}",
         ]
         self.info_display.setPlainText("\n".join(info_lines))
+
+    def _auto_fill_subplots(self, ctx: DataContext):
+        """加载数据后自动将常用信号填入子图0。"""
+        default_signals = [
+            '无线电高度表决值',
+            '指示空速表决值',
+            '俯仰角表决值',
+            '法向过载_I1',
+        ]
+        plot = self.plot_widget
+        # 清空后只填充子图0
+        plot.subplot_fields = {i: [] for i in range(4)}
+        for signal_id in default_signals:
+            field = ctx.resolve_field(signal_id)
+            if field and field not in plot.subplot_fields[0]:
+                plot.subplot_fields[0].append(field)

@@ -48,6 +48,7 @@ class DataContext:
         self.time_vec: np.ndarray | None = None
         self.time_sec: np.ndarray | None = None
         self._loaded = False
+        self._label_cache: dict[str, str] | None = None
 
     @staticmethod
     def resolve_path(path_value: str | os.PathLike[str] | None, default: str = "") -> str:
@@ -63,14 +64,14 @@ class DataContext:
                 return str(candidate)
         return str(p.resolve())
 
-    def load(self, data_path: str, excel_path: str) -> bool:
-        """加载数据和标签映射。返回 True 表示成功。"""
+    def load(self, data_path: str, excel_path: str) -> tuple[bool, str]:
+        """加载数据和标签映射。返回 (ok, error_msg)。"""
         self.data_path = data_path
         self.excel_path = excel_path
 
         if not os.path.exists(data_path):
             self._loaded = False
-            return False
+            return False, f"数据文件不存在: {data_path}"
 
         try:
             raw = param_extract(data_path)
@@ -83,16 +84,25 @@ class DataContext:
                 try:
                     self.lm = LabelMap(excel_path)
                     _add_weight_cg(self.data, self.lm)
-                except Exception:
+                except Exception as e:
                     self.lm = None
             else:
                 self.lm = None
 
+            # 预转换所有数值列为 float64，避免下游重复转换
+            for k in list(self.data.keys()):
+                if k not in ("TIME", "filename"):
+                    arr = np.asarray(self.data[k], dtype=float)
+                    self.data[k] = arr
+
+            # 重置缓存
+            self._label_cache = None
+
             self._loaded = True
-            return True
-        except Exception:
+            return True, ""
+        except Exception as e:
             self._loaded = False
-            return False
+            return False, str(e)
 
     @property
     def is_loaded(self) -> bool:
@@ -107,7 +117,9 @@ class DataContext:
         return [k for k in self.data if k != "TIME"]
 
     def get_field_labels(self) -> dict[str, str]:
-        """字段名 → 中文标签。"""
+        """字段名 → 中文标签（惰性缓存）。"""
+        if self._label_cache is not None:
+            return self._label_cache
         result: dict[str, str] = {}
         for field in self.get_field_names():
             if self.lm is not None:
@@ -117,6 +129,7 @@ class DataContext:
                     result[field] = field
             else:
                 result[field] = field
+        self._label_cache = result
         return result
 
     def get_label(self, field_name: str) -> str:
@@ -163,7 +176,7 @@ class DataContext:
         for i, f in enumerate(fields):
             col = self.data.get(f)
             if col is not None:
-                signals[:, i] = np.asarray(col, dtype=float)
+                signals[:, i] = col  # 已为 float64
         return self.time_sec, signals, labels
 
     # -- 统计 --

@@ -26,7 +26,7 @@ import numpy as np
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, Signal, QTimer
 from PySide6.QtGui import QAction, QFont
 from PySide6.QtWidgets import (
     QFileDialog,
@@ -40,8 +40,11 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from matplotlib.ticker import FuncFormatter
+
 from ..statistics import find_crossing_points
 from ..time_utils import format_time_seconds
+from ..plotting import _configure_display_font
 from .services import DataContext
 
 
@@ -80,8 +83,14 @@ class PlotCanvasWidget(QWidget):
         # 子图右键菜单追踪
         self._right_clicked_axes_idx: int | None = None
 
+        # 缩放防抖定时器
+        self._zoom_timer: QTimer | None = None
+
+        # 首次调用时扫描字体（_configure_display_font 是惰性的）
+        _configure_display_font()
+
         self._build_ui()
-        self._rebuild_axes()
+        self._rebuild_axes_for_mode()
         self._connect_events()
 
     # ── 布局构建 ──
@@ -103,19 +112,16 @@ class PlotCanvasWidget(QWidget):
     # ── 子图布局管理 ──
 
     def _switch_layout(self, mode: str):
-        """切换子图布局模式。"""
+        """切换子图布局模式（原子操作）。"""
         if mode == self._layout_mode:
             return
-        old_mode = self._layout_mode
         self._layout_mode = mode
 
-        # 保存当前信号分配
+        # 1. 重分配信号到新布局
         old_fields = dict(self.subplot_fields)
-
-        # 构建新布局的 subplot_fields
         if mode == "1x1":
             new_count = 1
-            max_per_plot = 0  # 无限制
+            max_per_plot = 0
         elif mode == "4x1":
             new_count = 4
             max_per_plot = 5
@@ -124,8 +130,6 @@ class PlotCanvasWidget(QWidget):
             max_per_plot = 4
 
         new_fields: dict[int, list[str]] = {i: [] for i in range(new_count)}
-
-        # 重分配信号：保持近似分组，按序填充新子图
         ordered_signals: list[str] = []
         for idx in sorted(old_fields.keys()):
             ordered_signals.extend(old_fields[idx])
@@ -138,17 +142,14 @@ class PlotCanvasWidget(QWidget):
                 if plot_idx < new_count:
                     new_fields[plot_idx].append(f)
                 else:
-                    # 溢出放入最后一个子图
                     new_fields[new_count - 1].append(f)
         elif mode == "1x1":
             new_fields[0] = list(ordered_signals)
 
-        # 移除溢出超过最大限制的信号
         for idx in list(new_fields.keys()):
             if max_per_plot > 0 and len(new_fields[idx]) > max_per_plot:
                 overflow = new_fields[idx][max_per_plot:]
                 new_fields[idx] = new_fields[idx][:max_per_plot]
-                # 尽量填入前面的子图
                 for f in overflow:
                     placed = False
                     for j in range(new_count):
@@ -161,35 +162,85 @@ class PlotCanvasWidget(QWidget):
 
         self.subplot_fields = new_fields
         self._selected_subplot_idx = None
-        self._rebuild_axes()
-        self._rebuild_plot()
-        self.log_message.emit(f"切换到 {mode} 布局")
 
-    def _rebuild_axes(self):
-        """根据当前布局模式重建坐标轴。"""
+        # 2. 原子化重建：一次 clear + 一次性创建所有轴并绘制
         self.figure.clear()
         self.axes = []
 
-        if self._layout_mode == "1x1":
+        crossing_fields: set[str] = set()
+
+        if mode == "1x1":
             ax = self.figure.add_subplot(111)
             ax.grid(True, alpha=0.3)
             self.axes.append(ax)
+            if self.ctx is not None:
+                self._plot_subplot(ax, 0, crossing_fields)
+            self.axes[0].set_xlabel("时间 (s)")
+            self.axes[0].xaxis.set_major_formatter(
+                FuncFormatter(lambda s, _: format_time_seconds(float(s))))
 
-        elif self._layout_mode == "4x1":
+        elif mode == "4x1":
             for i in range(4):
                 ax = self.figure.add_subplot(4, 1, i + 1)
                 ax.grid(True, alpha=0.3)
                 self.axes.append(ax)
+                if self.ctx is not None:
+                    self._plot_subplot(ax, i, crossing_fields)
             self.axes[-1].set_xlabel("时间 (s)")
+            self.axes[-1].xaxis.set_major_formatter(
+                FuncFormatter(lambda s, _: format_time_seconds(float(s))))
 
-        elif self._layout_mode == "2x2":
+        elif mode == "2x2":
             for i in range(4):
                 ax = self.figure.add_subplot(2, 2, i + 1)
                 ax.grid(True, alpha=0.3)
                 self.axes.append(ax)
+                if self.ctx is not None:
+                    self._plot_subplot(ax, i, crossing_fields)
+            for i in [2, 3]:
+                self.axes[i].set_xlabel("时间 (s)")
+                self.axes[i].xaxis.set_major_formatter(
+                    FuncFormatter(lambda s, _: format_time_seconds(float(s))))
+
+        # 3. 后处理
+        self._apply_spine_color()
+        self._update_master_combo(sorted(crossing_fields))
+
+        self.figure.tight_layout()
+        self.canvas.draw_idle()
+        self.log_message.emit(f"切换到 {mode} 布局")
+
+    def _rebuild_axes_for_mode(self):
+        """初始化时创建默认布局的空轴。"""
+        self.figure.clear()
+        self.axes = []
+        for i in range(4):
+            ax = self.figure.add_subplot(4, 1, i + 1)
+            ax.grid(True, alpha=0.3)
+            self.axes.append(ax)
+        self.axes[-1].set_xlabel("时间 (s)")
+        self.axes[-1].xaxis.set_major_formatter(
+            FuncFormatter(lambda s, _: format_time_seconds(float(s))))
+        self.figure.tight_layout()
+
+    def _plot_subplot(self, ax, idx: int, crossing_fields: set[str]):
+        """在子图 ax 上绘制 idx 对应的信号（不调 ax.clear）。"""
+        fields = self.subplot_fields.get(idx, [])
+        if fields:
+            for f in fields:
+                data_arr = self.ctx.data.get(f)
+                if data_arr is not None and self.ctx.time_sec is not None:
+                    ax.plot(self.ctx.time_sec, data_arr, linewidth=0.8, label=self.ctx.get_label(f))
+                    crossing_fields.add(f)
+            if len(fields) > 1:
+                ax.legend(fontsize=8)
+            ax.set_ylabel(self.ctx.get_label(fields[0]) if len(fields) == 1 else f"子图{idx + 1}")
+        else:
+            ax.text(0.5, 0.5, f"子图 {idx + 1}（空）\n点击选中后添加参数",
+                    ha="center", va="center", transform=ax.transAxes, fontsize=9, alpha=0.4)
 
     def _rebuild_plot(self):
-        """重新绘制所有子图上的信号。"""
+        """重新绘制所有子图（仅信号内容变化时调用，不重建 axes）。"""
         if self.ctx is None:
             return
 
@@ -204,8 +255,7 @@ class PlotCanvasWidget(QWidget):
                 for f in fields:
                     data_arr = self.ctx.data.get(f)
                     if data_arr is not None and self.ctx.time_sec is not None:
-                        arr = np.asarray(data_arr, dtype=float)
-                        ax.plot(self.ctx.time_sec, arr, linewidth=0.8, label=self.ctx.get_label(f))
+                        ax.plot(self.ctx.time_sec, data_arr, linewidth=0.8, label=self.ctx.get_label(f))
                         crossing_fields.add(f)
                 if len(fields) > 1:
                     ax.legend(fontsize=8)
@@ -218,11 +268,22 @@ class PlotCanvasWidget(QWidget):
             self.axes[-1].set_xlabel("时间 (s)")
         elif self._layout_mode == "1x1":
             self.axes[0].set_xlabel("时间 (s)")
+        elif self._layout_mode == "2x2":
+            for i in [2, 3]:
+                self.axes[i].set_xlabel("时间 (s)")
 
-        # 恢复子图选中高亮
+        bottom_axes = []
+        if self._layout_mode == "4x1":
+            bottom_axes = [self.axes[-1]]
+        elif self._layout_mode == "1x1":
+            bottom_axes = [self.axes[0]]
+        elif self._layout_mode == "2x2":
+            bottom_axes = [self.axes[i] for i in [2, 3]]
+        for ax in bottom_axes:
+            ax.xaxis.set_major_formatter(FuncFormatter(
+                lambda s, _: format_time_seconds(float(s))))
+
         self._apply_spine_color()
-
-        # 更新穿越信号选择
         self._update_master_combo(sorted(crossing_fields))
 
         self.figure.tight_layout()
@@ -462,7 +523,7 @@ class PlotCanvasWidget(QWidget):
             self.canvas.draw_idle()
             return
 
-        master_arr = np.asarray(master_data, dtype=float)
+        master_arr = master_data  # 已由 DataContext 预转为 float64
         colors = {"left": "red", "right": "firebrick"}
         linestyles = {"left": "solid", "right": "dashed"}
 
@@ -483,9 +544,12 @@ class PlotCanvasWidget(QWidget):
     # ── 统计更新 ──
 
     def _on_canvas_zoom(self, event=None):
-        """画布缩放/滚动后更新统计。"""
-        from PySide6.QtCore import QTimer
-        QTimer.singleShot(100, self._update_stats)
+        """画布缩放/滚动后更新统计（防抖 200ms）。"""
+        if self._zoom_timer is None:
+            self._zoom_timer = QTimer()
+            self._zoom_timer.setSingleShot(True)
+            self._zoom_timer.timeout.connect(self._update_stats)
+        self._zoom_timer.start(200)
 
     def _update_stats(self):
         """更新统计信息。"""
@@ -510,7 +574,6 @@ class PlotCanvasWidget(QWidget):
                 arr = self.ctx.data.get(f)
                 if arr is None:
                     continue
-                arr = np.asarray(arr, dtype=float)
                 idx = (self.ctx.time_sec >= t_start) & (self.ctx.time_sec <= t_end)
                 seg = arr[idx]
                 if len(seg) > 0:

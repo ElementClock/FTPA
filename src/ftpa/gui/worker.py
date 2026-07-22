@@ -74,7 +74,7 @@ class DataLoaderWorker(QObject):
     """数据加载专用工作者。"""
 
     progress = Signal(int, str)
-    finished = Signal(bool, str)
+    finished = Signal(object, str)  # (DataContext | None, error_msg)
 
     def __init__(self, data_path: str, excel_path: str):
         super().__init__()
@@ -87,11 +87,11 @@ class DataLoaderWorker(QObject):
 
             ctx = DataContext()
             self.progress.emit(30, "正在加载数据...")
-            ok = ctx.load(self.data_path, self.excel_path)
+            ok, msg = ctx.load(self.data_path, self.excel_path)
             if ok:
                 self.progress.emit(100, "加载完成")
-                self.finished.emit(True, "")
+                self.finished.emit(ctx, "")
             else:
-                self.finished.emit(False, f"文件不存在: {self.data_path}")
+                self.finished.emit(None, msg or f"加载失败: {self.data_path}")
         except Exception as e:
-            self.finished.emit(False, str(e))
+            self.finished.emit(None, str(e))
