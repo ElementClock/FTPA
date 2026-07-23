@@ -27,12 +27,13 @@ from PySide6.QtWidgets import (
 
 from ..constants import BASE_OIL, BASE_REL_CG, BASE_WEIGHT
 from ..data_loader import param_extract
+from ..utils import resolve_excel_path
 from .widgets import SignalSearchPanel, TimeWindowCtrl
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_TXT = PROJECT_ROOT / "FTPD-AG600-007-QD-260509-G-1-飞机性能操稳-32.txt"
-DEFAULT_EXCEL = PROJECT_ROOT / "matlab" / "参数名.xlsx"
+DEFAULT_EXCEL = resolve_excel_path()
 
 
 class DataConfigPanel(QWidget):

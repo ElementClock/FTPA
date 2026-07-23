@@ -24,6 +24,7 @@ if __package__ in {None, ""}:
     from ftpa.plotting import plot_time_signals_interactive
     from ftpa.time_utils import select_time_window
     from ftpa.constants import CHUNK_SIZE
+    from ftpa.utils import resolve_excel_path
 else:
     from .data_loader import param_extract, extract_time
     from .label_map import LabelMap
@@ -32,11 +33,11 @@ else:
     from .batch_processor import _add_weight_cg
     from .time_utils import select_time_window
     from .constants import CHUNK_SIZE
+    from .utils import resolve_excel_path
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_TXT_FILE = PROJECT_ROOT / "FTPD-AG600-007-QD-260509-G-1-飞机性能操稳-32.txt"
-DEFAULT_EXCEL_FILE = PROJECT_ROOT / "matlab看飞测数据" / "参数名.xlsx"
 
 
 def resolve_path(path_value: str | os.PathLike[str] | None, default_path: Path | None = None) -> str:
@@ -75,7 +76,7 @@ def resolve_path(path_value: str | os.PathLike[str] | None, default_path: Path |
 def _load_and_prepare(data_file, excel_file):
     """加载数据、标签映射、计算重量重心。返回 (data, lm)。"""
     txt_path = resolve_path(data_file, DEFAULT_TXT_FILE)
-    excel_path = resolve_path(excel_file, DEFAULT_EXCEL_FILE)
+    excel_path = resolve_excel_path(excel_file)
     if not os.path.exists(excel_path):
         raise FileNotFoundError(f"标签映射文件不存在: {excel_path}")
 
@@ -333,8 +334,8 @@ def main() -> int:
     )
     parser.add_argument(
         "--excel-file",
-        default=str(DEFAULT_EXCEL_FILE),
-        help="标签映射 Excel 文件路径"
+        default=None,
+        help="标签映射 Excel 文件路径（默认：自动发现 data/参数名.xlsx）"
     )
     parser.add_argument(
         "--gui",

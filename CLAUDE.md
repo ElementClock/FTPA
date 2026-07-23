@@ -88,7 +88,7 @@ Argparse dispatcher to modes (`verify`, `chunked`, `analysis`, `stats`, `interac
 ### Key details
 
 - **Dependencies**: numpy, pandas, matplotlib, scipy, openpyxl, plotly, wxPython (not in requirements.txt — needs platform-specific wheel)
-- **Default paths**: `DEFAULT_TXT_FILE` = project root / `FTPD-AG600-...txt`, `DEFAULT_EXCEL_FILE` = `matlab/参数名.xlsx`
+- **Default paths**: `DEFAULT_TXT_FILE` = project root / `FTPD-AG600-...txt`; `resolve_excel_path()` auto-discovers `data/参数名.xlsx` → project root
 - **CJK font detection**: `plotting._configure_display_font()` tries Microsoft YaHei → SimHei → system fallback
 - **Shared config** (`constants.py`): `BASE_WEIGHT=48487`, `BASE_REL_CG=25.28`, `BASE_OIL=6000.0`, `TRIM_HEAD=50`, `TRIM_TAIL=50`, `CHUNK_SIZE=10000`
 - **MATLAB heritage**: Python code structure mirrors MATLAB files closely. `compute_total_weight_rel_cg` uses hardcoded 1007-aircraft fuel characteristics tables ported from MATLAB.

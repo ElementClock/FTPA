@@ -54,7 +54,6 @@ logger = logging.getLogger(__name__)
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_TXT = PROJECT_ROOT / "FTPD-AG600-007-QD-260509-G-1-飞机性能操稳-32.txt"
-DEFAULT_EXCEL = PROJECT_ROOT / "matlab" / "参数名.xlsx"
 
 
 class MainWindow(QMainWindow):
@@ -347,18 +346,17 @@ class MainWindow(QMainWindow):
     # ── 数据加载 ──
 
     def _load_data(self):
-        """加载数据。"""
-        # 选择数据文件
+        """加载数据——自动发现标签文件，不再手动选择。"""
+        from ..utils import resolve_excel_path
+
         dp, _ = QFileDialog.getOpenFileName(
             self, "选择数据文件", str(DEFAULT_TXT), "文本文件 (*.txt);;所有文件 (*)")
         if not dp:
             return
 
-        # 选择标签文件
-        ep, _ = QFileDialog.getOpenFileName(
-            self, "选择标签文件", str(DEFAULT_EXCEL), "Excel 文件 (*.xlsx *.xls);;所有文件 (*)")
-        if not ep:
-            return
+        ep = resolve_excel_path()
+        if not os.path.exists(ep):
+            logger.warning("标签文件自动发现失败: %s", ep)
 
         self._do_load(dp, ep)
 
