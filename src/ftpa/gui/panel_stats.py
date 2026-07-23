@@ -22,13 +22,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ..statistics import (
-    compute_takeoff_landing_stats,
-    crossing_analysis,
-    statistics_params,
-)
 from .services import DataContext
-from .widgets import CrossingCtrl, StatsTableWidget, TimeWindowCtrl
+from .widgets import StatsTableWidget, TimeWindowCtrl
 
 
 class StatisticsPanel(QWidget):
@@ -91,7 +86,7 @@ class StatisticsPanel(QWidget):
         text = self.param_signal_input.text().strip()
         signal_ids = [s.strip() for s in text.split(",") if s.strip()] if text else None
         try:
-            results = statistics_params(t_start or "", t_end or "", self.ctx.data, self.ctx.lm, signal_ids)
+            results = self.ctx.compute_parameter_stats(t_start or "", t_end or "", signal_ids)
             self.param_table.populate(results)
         except Exception as e:
             self.param_table.setRowCount(1)
@@ -154,9 +149,8 @@ class StatisticsPanel(QWidget):
             signal_ids = [main_signal] + signal_ids
 
         try:
-            results = crossing_analysis(
-                self.ctx.data, self.ctx.lm, signal_ids, mode, threshold,
-                t_start or "", t_end or ""
+            results = self.ctx.compute_crossing_analysis(
+                signal_ids, mode, threshold, t_start or "", t_end or ""
             )
             self.cross_result.setPlainText("\n".join(results) if results else "无穿越结果")
         except Exception as e:
@@ -185,7 +179,7 @@ class StatisticsPanel(QWidget):
             return
         t_start, t_end = self.to_time.get_time_range()
         try:
-            result = compute_takeoff_landing_stats(t_start or "", t_end or "", self.ctx.data, self.ctx.lm)
+            result = self.ctx.compute_takeoff_landing_stats(t_start or "", t_end or "")
             self.to_result.setPlainText(result)
         except Exception as e:
             self.to_result.setPlainText(f"错误: {e}")

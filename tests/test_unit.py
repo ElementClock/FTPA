@@ -16,13 +16,12 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from ftpa.utils import make_valid_name
 from ftpa.label_map import LabelMap
-from ftpa.data_loader import (
+from ftpa.data import (
     extract_column_efficient,
     param_extract,
     extract_time,
-    _read_data_file,
-    _resolve_zip_file
 )
+from ftpa.data.io import read_data_file, resolve_zip_file
 from ftpa.time_utils import (
     select_time_window,
     format_time_seconds,
@@ -140,7 +139,7 @@ class TestDataLoader:
     
     def test_read_data_file(self, temp_data_file):
         """测试读取数据文件"""
-        df = _read_data_file(temp_data_file)
+        df = read_data_file(temp_data_file)
         assert df is not None
         assert len(df) == 200
         assert 'TIME' in df.columns

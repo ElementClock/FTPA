@@ -17,20 +17,20 @@ logger = logging.getLogger(__name__)
 
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-    from ftpa.data_loader import param_extract, extract_time
+    from ftpa.data import param_extract, extract_time
     from ftpa.label_map import LabelMap
-    from ftpa.batch_processor import _add_weight_cg
+    from ftpa.computing.weight_cg import add_weight_cg_to_data as _add_weight_cg
     from ftpa.statistics import compute_var_stats, show_group_stats, compute_takeoff_landing_stats
     from ftpa.plotting import plot_time_signals_interactive
     from ftpa.time_utils import select_time_window
     from ftpa.constants import CHUNK_SIZE
     from ftpa.utils import resolve_excel_path
 else:
-    from .data_loader import param_extract, extract_time
+    from .data import param_extract, extract_time
     from .label_map import LabelMap
     from .statistics import compute_var_stats, show_group_stats, compute_takeoff_landing_stats
     from .plotting import plot_time_signals_interactive
-    from .batch_processor import _add_weight_cg
+    from .computing.weight_cg import add_weight_cg_to_data as _add_weight_cg
     from .time_utils import select_time_window
     from .constants import CHUNK_SIZE
     from .utils import resolve_excel_path

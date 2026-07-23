@@ -26,7 +26,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ..computing import compute_fitted_circle_radius
+from ..computing.circle_fit import compute_fitted_circle_radius
 from .services import DataContext
 from .widgets import TimeWindowCtrl
 

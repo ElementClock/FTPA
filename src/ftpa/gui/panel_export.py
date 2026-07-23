@@ -23,7 +23,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ..exporter import export_data, export_statistics, generate_data_summary
+from ..exporter import export_data, export_statistics
 from .services import DataContext
 
 
@@ -129,10 +129,9 @@ class ExportPanel(QWidget):
         if not path:
             path = f"statistics.{fmt}"
         try:
-            # 导出基本统计（默认取前 20 个信号）
-            from ..statistics import statistics_params
+            # 通过 DataContext 计算并导出统计
             signals = self.ctx.get_field_names()[:20]
-            stats = statistics_params("", "", self.ctx.data, self.ctx.lm, signals)
+            stats = self.ctx.compute_parameter_stats("", "", signals)
             result = export_statistics(stats, path, fmt)
             self.stat_path.setText(result)
         except Exception as e:
@@ -142,7 +141,7 @@ class ExportPanel(QWidget):
         if self.ctx is None:
             return
         try:
-            summary = generate_data_summary(self.ctx.data)
+            summary = self.ctx.generate_summary()
             channels = summary.get("channels", summary.get("data", {}))
             if isinstance(channels, list):
                 self.summary_table.setRowCount(len(channels))

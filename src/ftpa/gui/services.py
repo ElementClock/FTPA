@@ -10,10 +10,10 @@ from pathlib import Path
 
 import numpy as np
 
-from ..batch_processor import _add_weight_cg
+from ..computing.weight_cg import add_weight_cg_to_data
 from ..computing import compute_fitted_circle_radius
 from ..constants import BASE_OIL, BASE_REL_CG, BASE_WEIGHT
-from ..data_loader import extract_time, param_extract
+from ..data import extract_time, param_extract
 from ..exporter import (
     export_data,
     export_statistics,
@@ -27,7 +27,7 @@ from ..statistics import (
     statistics_params,
 )
 from ..time_utils import time_to_seconds_array
-from ..utils import column_to_field_name
+from ..utils.paths import column_to_field_name
 
 DATA_DIRS = [
     Path(__file__).resolve().parents[2],  # project root
@@ -83,7 +83,7 @@ class DataContext:
             if os.path.exists(excel_path):
                 try:
                     self.lm = LabelMap(excel_path)
-                    _add_weight_cg(self.data, self.lm)
+                    add_weight_cg_to_data(self.data, self.lm)
                 except Exception as e:
                     self.lm = None
             else:

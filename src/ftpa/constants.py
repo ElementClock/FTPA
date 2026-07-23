@@ -12,7 +12,8 @@ BASE_OIL = 6000.0        # 任务油量 (kg)
 X0 = 15.902              # 参考点绝对重心 (m)
 L = 4.453                # 参考长度 (m)
 
-# 数据加载参数
-TRIM_HEAD = 50            # 文件头部裁剪行数
-TRIM_TAIL = 50            # 文件尾部裁剪行数
-CHUNK_SIZE = 10000        # 分块读取每块行数
+# 数据加载与文件参数
+EXCEL_FILENAME = "参数名.xlsx"     # 标签映射 Excel 文件名
+TRIM_HEAD = 50                     # 文件头部裁剪行数
+TRIM_TAIL = 50                     # 文件尾部裁剪行数
+CHUNK_SIZE = 10000                 # 分块读取每块行数

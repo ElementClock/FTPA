@@ -13,7 +13,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from ftpa.utils import make_valid_name, column_to_field_name
 from ftpa.label_map import LabelMap
-from ftpa.data_loader import param_extract, extract_time
+from ftpa.data import param_extract, extract_time
 from ftpa.time_utils import select_time_window, format_time_seconds
 from ftpa.computing import compute_total_weight_rel_cg, compute_fitted_circle_radius
 from ftpa.statistics import (

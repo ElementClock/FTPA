@@ -7,7 +7,7 @@ AG600试飞数据处理系统
 __version__ = "1.0.1"
 __author__ = "FTPA Team"
 
-from .data_loader import param_extract, extract_time
+from .data import param_extract, extract_time
 from .label_map import LabelMap
 from .computing import compute_total_weight_rel_cg, compute_fitted_circle_radius
 from .statistics import (

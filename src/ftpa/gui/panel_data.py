@@ -26,8 +26,7 @@ from PySide6.QtWidgets import (
 )
 
 from ..constants import BASE_OIL, BASE_REL_CG, BASE_WEIGHT
-from ..data_loader import param_extract
-from ..utils import resolve_excel_path
+from ..utils.paths import resolve_excel_path
 from .widgets import SignalSearchPanel, TimeWindowCtrl
 
 
