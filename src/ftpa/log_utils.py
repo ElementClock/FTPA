@@ -47,3 +47,6 @@ def setup_logging(log_file: str | None = None) -> None:
             datefmt="%Y-%m-%d %H:%M:%S",
         ))
         root.addHandler(fh)
+
+    # 抑制第三方库 DEBUG noise
+    logging.getLogger('matplotlib').setLevel(logging.WARNING)

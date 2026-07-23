@@ -4,10 +4,13 @@
 提供重量重心反解和回转半径计算功能
 """
 
+import logging
 import numpy as np
 from scipy.linalg import eig
 from .constants import X0, L
 from .time_utils import select_time_window
+
+logger = logging.getLogger(__name__)
 
 
 def compute_total_weight_rel_cg(oil_lout, oil_lin, oil_rin, oil_rout,
@@ -156,8 +159,7 @@ def compute_fitted_circle_radius(time_vec, start_t, end_t, longitude, latitude):
     
     # 检查数据点数
     if n < 3:
-        print('警告: 时间窗口内有效数据点不足3个，无法拟合圆。')
-        print('回转半径\tNaN')
+        logger.warning('时间窗口内有效数据点不足3个，无法拟合圆。')
         return np.nan
     
     # 经纬度转换为局部平面坐标（米）

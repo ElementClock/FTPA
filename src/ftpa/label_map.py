@@ -4,8 +4,11 @@
 从 Excel 加载变量名与中文标签的映射关系
 """
 
+import logging
 import pandas as pd
 from .utils import make_valid_name
+
+logger = logging.getLogger(__name__)
 
 
 class LabelMap:
@@ -70,7 +73,7 @@ class LabelMap:
         elif var_name in self._orig2label:
             return self._orig2label[var_name]
         else:
-            print(f'警告: 变量 "{var_name}" 未在映射表中找到，返回原名称。')
+            logger.warning('变量 "%s" 未在映射表中找到，返回原名称。', var_name)
             return var_name
     
     def get_var_name(self, label: str, mode: str = 'field') -> str:
@@ -94,7 +97,7 @@ class LabelMap:
         if label in mapping:
             return mapping[label]
         else:
-            print(f'警告: 中文标签 "{label}" 未找到，返回空字符串。')
+            logger.warning('中文标签 "%s" 未找到，返回空字符串。', label)
             return ''
     
     def list_all(self) -> pd.DataFrame:

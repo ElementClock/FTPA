@@ -47,7 +47,7 @@ def install_gui_logger(sink) -> GuiLogHandler:
     emitter.log_record.connect(sink, Qt.QueuedConnection)
 
     handler = GuiLogHandler(emitter)
-    handler.setLevel(logging.DEBUG)
+    handler.setLevel(logging.INFO)
 
     root = logging.getLogger()
     root.addHandler(handler)

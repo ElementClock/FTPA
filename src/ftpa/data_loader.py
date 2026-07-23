@@ -4,6 +4,7 @@
 负责从数据文件提取所有列数据，支持 ZIP 压缩和缓存机制
 """
 
+import logging
 import os
 import zipfile
 import tempfile
@@ -12,6 +13,8 @@ import pandas as pd
 import numpy as np
 from .utils import column_to_field_name
 from .constants import TRIM_HEAD, TRIM_TAIL
+
+logger = logging.getLogger(__name__)
 
 
 # 模块级缓存（替代 MATLAB 的 persistent 变量）
@@ -116,7 +119,7 @@ def param_extract(filename: str) -> dict:
         if n_total >= n_drop:
             col_data = col_data[TRIM_HEAD:n_total - TRIM_TAIL]
         else:
-            print(f"警告: 数据长度 ({n_total}) 小于需截取的长度 ({n_drop})，返回空数组。")
+            logger.warning("数据长度 (%d) 小于需截取的长度 (%d)，返回空数组。", n_total, n_drop)
             col_data = np.array([])
         
         data[field_name] = col_data
@@ -156,7 +159,7 @@ def extract_time(filename: str) -> np.ndarray:
     if n_total >= n_drop:
         time_str = time_str.iloc[TRIM_HEAD:n_total - TRIM_TAIL]
     else:
-        print(f"警告: 数据长度 ({n_total}) 小于需截取的长度 ({n_drop})，返回空数组。")
+        logger.warning("数据长度 (%d) 小于需截取的长度 (%d)，返回空数组。", n_total, n_drop)
         return np.array([], dtype='timedelta64[ns]')
     
     # 转换格式：MATLAB 的 TIME 格式为 "HH:MM:SS:mmm"
@@ -213,7 +216,7 @@ def extract_column_efficient(filename: str, col_name: str,
     if n_total >= n_drop:
         data = data[TRIM_HEAD:n_total - TRIM_TAIL]
     else:
-        print(f"警告: 数据长度 ({n_total}) 小于需截取的长度 ({n_drop})，返回空数组。")
+        logger.warning("数据长度 (%d) 小于需截取的长度 (%d)，返回空数组。", n_total, n_drop)
         data = np.array([])
     
     return data

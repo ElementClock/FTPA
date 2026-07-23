@@ -25,7 +25,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QSettings
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (
     QApplication,
@@ -356,8 +356,10 @@ class MainWindow(QMainWindow):
         """加载数据——自动发现标签文件，不再手动选择。"""
         from ..utils import resolve_excel_path
 
+        settings = QSettings("FTPA", "FTPA")
+        last_dir = settings.value("last_data_dir", str(DEFAULT_TXT))
         dp, _ = QFileDialog.getOpenFileName(
-            self, "选择数据文件", str(DEFAULT_TXT), "文本文件 (*.txt);;所有文件 (*)")
+            self, "选择数据文件", last_dir, "文本文件 (*.txt);;所有文件 (*)")
         if not dp:
             return
 
@@ -410,6 +412,10 @@ class MainWindow(QMainWindow):
         if not ctx.is_loaded or not ctx.data:
             QMessageBox.critical(self, "数据无效", "数据加载后为空，请检查文件格式。")
             return
+
+        # 记住上次成功加载的数据文件目录
+        settings = QSettings("FTPA", "FTPA")
+        settings.setValue("last_data_dir", os.path.dirname(ctx.data_path))
 
         # 重置子图（不自动填充默认信号）
         self.plot_widget.subplot_fields = {i: [] for i in range(len(self.plot_widget.axes))}

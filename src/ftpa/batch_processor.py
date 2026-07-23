@@ -3,6 +3,7 @@
 支持多文件批量处理和分析
 """
 
+import logging
 import os
 import glob
 from typing import List, Dict, Callable, Optional
@@ -15,6 +16,8 @@ from .label_map import LabelMap
 from .computing import compute_total_weight_rel_cg
 from .constants import BASE_WEIGHT, BASE_REL_CG, BASE_OIL
 from .exporter import export_data, generate_data_summary
+
+logger = logging.getLogger(__name__)
 
 
 def batch_process_files(file_pattern: str,
@@ -45,7 +48,7 @@ def batch_process_files(file_pattern: str,
     files = glob.glob(file_pattern)
     
     if not files:
-        print(f"警告: 未找到匹配的文件: {file_pattern}")
+        logger.warning("未找到匹配的文件: %s", file_pattern)
         return {'success_count': 0, 'failed_count': 0, 'results': []}
     
     if verbose:
@@ -172,7 +175,7 @@ def batch_analyze_statistics(file_pattern: str,
     files = glob.glob(file_pattern)
     
     if not files:
-        print(f"警告: 未找到匹配的文件: {file_pattern}")
+        logger.warning("未找到匹配的文件: %s", file_pattern)
         return pd.DataFrame()
     
     lm = LabelMap(excel_file)
@@ -255,7 +258,7 @@ def batch_export_summaries(file_pattern: str,
     files = glob.glob(file_pattern)
     
     if not files:
-        print(f"警告: 未找到匹配的文件: {file_pattern}")
+        logger.warning("未找到匹配的文件: %s", file_pattern)
         return
     
     lm = LabelMap(excel_file)
@@ -335,4 +338,4 @@ def _add_weight_cg(data: Dict, lm: LabelMap):
             lm.add('totalWeight', '总重')
             lm.add('relCg', '相对重心')
     except Exception as e:
-        print(f"警告: 重量重心计算失败: {e}")
+        logger.warning("重量重心计算失败: %s", e)
