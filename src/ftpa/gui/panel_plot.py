@@ -83,6 +83,9 @@ class PlotCanvasWidget(QWidget):
         # 子图右键菜单追踪
         self._right_clicked_axes_idx: int | None = None
 
+        # 穿越点 x 坐标缓存（供 apply_crossing 缩放使用）
+        self._crossing_x: dict[str, float | None] = {"left": None, "right": None}
+
         # 缩放防抖定时器
         self._zoom_timer: QTimer | None = None
 
@@ -464,6 +467,15 @@ class PlotCanvasWidget(QWidget):
             self.subplot_fields[idx] = []
             self._rebuild_plot()
 
+    def clear_selected_subplot(self):
+        """清空当前选中子图的所有信号（供外部按钮调用）。"""
+        idx = self._selected_subplot_idx
+        if idx is None:
+            self.log_message.emit("请先点击选中一个子图")
+            return
+        self._clear_subplot(idx)
+        self.log_message.emit(f"已清空子图 {idx + 1}")
+
     # ── 穿越分析 ──
 
     def set_crossing_context(self, left_val: float, left_mode: str,
@@ -482,17 +494,24 @@ class PlotCanvasWidget(QWidget):
 
     def apply_crossing(self, left_val: float, left_mode: str,
                        right_val: float, right_mode: str, master_field: str):
-        """应用穿越 — 由外部控制面板调用。"""
+        """应用穿越 — 缩放到左右穿越点之间的时间区间。"""
         self.left_val = left_val
         self.left_mode = left_mode
         self.right_val = right_val
         self.right_mode = right_mode
         self.master_field = master_field
         self._redraw_crossing()
+        # 缩放到左右穿越点之间的区间
+        left_x = self._crossing_x.get("left")
+        right_x = self._crossing_x.get("right")
+        if left_x is not None and right_x is not None and left_x < right_x:
+            pad = (right_x - left_x) * 0.05
+            for ax in self.axes:
+                ax.set_xlim(left_x - pad, right_x + pad)
+            self.canvas.draw_idle()
 
     def reset_zoom(self):
-        """重置缩放至全范围。"""
-        self._clear_crossing_lines()
+        """重置时间范围到数据起止（保留穿越线）。"""
         if self.ctx and self.ctx.time_sec is not None and len(self.ctx.time_sec) > 1:
             for ax in self.axes:
                 ax.set_xlim(float(self.ctx.time_sec[0]), float(self.ctx.time_sec[-1]))
@@ -508,7 +527,7 @@ class PlotCanvasWidget(QWidget):
         self.crossing_lines.clear()
 
     def _redraw_crossing(self):
-        """重新绘制穿越线。"""
+        """重新绘制穿越线，并保存穿越点 x 坐标。"""
         self._clear_crossing_lines()
         ctx = self.ctx
         if ctx is None or ctx.time_sec is None:
@@ -523,6 +542,9 @@ class PlotCanvasWidget(QWidget):
             self.canvas.draw_idle()
             return
 
+        # 清空上次的穿越点缓存
+        self._crossing_x = {"left": None, "right": None}
+
         master_arr = master_data  # 已由 DataContext 预转为 float64
         colors = {"left": "red", "right": "firebrick"}
         linestyles = {"left": "solid", "right": "dashed"}
@@ -532,6 +554,7 @@ class PlotCanvasWidget(QWidget):
             pos = find_crossing_points(master_arr, val, mode)
             if pos is not None:
                 x_pos = float(ctx.time_sec[pos - 1])
+                self._crossing_x[side] = x_pos  # 保存坐标
                 for ax in self.axes:
                     if ax.get_visible():
                         line = ax.axvline(x_pos, color=colors[side], linewidth=1.0,

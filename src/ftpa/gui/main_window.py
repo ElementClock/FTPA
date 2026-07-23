@@ -87,6 +87,7 @@ class MainWindow(QMainWindow):
         self.param_tree = ParameterTreeWidget()
         self.param_tree.add_clicked.connect(self._on_add_param)
         self.param_tree.remove_clicked.connect(self._on_remove_param)
+        self.param_tree.clear_clicked.connect(self._on_clear_param)
 
         splitter = QSplitter(Qt.Horizontal)
         splitter.addWidget(self.plot_widget)
@@ -275,6 +276,12 @@ class MainWindow(QMainWindow):
         self._update_param_tree_indicators()
         self._update_master_combo()
 
+    def _on_clear_param(self):
+        """参数树「清空」按钮回调。"""
+        self.plot_widget.clear_selected_subplot()
+        self._update_param_tree_indicators()
+        self._update_master_combo()
+
     def _update_param_tree_indicators(self):
         """更新参数树中的使用指示器。"""
         self.param_tree.update_indicators(self.plot_widget.subplot_fields)
@@ -404,8 +411,8 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "数据无效", "数据加载后为空，请检查文件格式。")
             return
 
-        # 自动填充默认信号到第一个子图
-        self._auto_fill_subplots(ctx)
+        # 重置子图（不自动填充默认信号）
+        self.plot_widget.subplot_fields = {i: [] for i in range(len(self.plot_widget.axes))}
 
         # 填充参数树
         field_labels = ctx.get_field_labels()
@@ -435,18 +442,3 @@ class MainWindow(QMainWindow):
         ]
         self.info_display.setPlainText("\n".join(info_lines))
 
-    def _auto_fill_subplots(self, ctx: DataContext):
-        """加载数据后自动将常用信号填入子图0。"""
-        default_signals = [
-            '无线电高度表决值',
-            '指示空速表决值',
-            '俯仰角表决值',
-            '法向过载_I1',
-        ]
-        plot = self.plot_widget
-        # 清空后只填充子图0
-        plot.subplot_fields = {i: [] for i in range(4)}
-        for signal_id in default_signals:
-            field = ctx.resolve_field(signal_id)
-            if field and field not in plot.subplot_fields[0]:
-                plot.subplot_fields[0].append(field)

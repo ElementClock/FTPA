@@ -189,6 +189,7 @@ class ParameterTreeWidget(QWidget):
     # 信号
     add_clicked = Signal(str)          # 参数 field_name
     remove_clicked = Signal(str)       # 参数 field_name
+    clear_clicked = Signal()           # 清空当前选中子图所有参数
     param_selected = Signal(str)       # 参数 field_name
 
     def __init__(self, parent: QWidget | None = None):
@@ -229,6 +230,12 @@ class ParameterTreeWidget(QWidget):
         self.remove_btn.setEnabled(False)
         self.remove_btn.clicked.connect(self._on_remove)
         btn_layout.addWidget(self.remove_btn)
+
+        self.clear_btn = QPushButton("清空")
+        self.clear_btn.setEnabled(False)
+        self.clear_btn.clicked.connect(self._on_clear)
+        btn_layout.addWidget(self.clear_btn)
+
         layout.addLayout(btn_layout)
 
     def set_params(self, field_labels: dict[str, str]):
@@ -303,6 +310,9 @@ class ParameterTreeWidget(QWidget):
         if self._selected_param:
             self.remove_clicked.emit(self._selected_param)
 
+    def _on_clear(self):
+        self.clear_clicked.emit()
+
     def _update_button_states(self):
         """根据当前选择状态更新按钮启用/禁用。"""
         subplot_selected = self._selected_subplot is not None
@@ -311,6 +321,7 @@ class ParameterTreeWidget(QWidget):
         if not subplot_selected or not param_selected:
             self.add_btn.setEnabled(False)
             self.remove_btn.setEnabled(False)
+            self._update_clear_btn()
             return
 
         # 检查参数是否已在选中的子图中
@@ -320,6 +331,15 @@ class ParameterTreeWidget(QWidget):
 
         self.add_btn.setEnabled(not in_subplot)
         self.remove_btn.setEnabled(in_subplot)
+        self._update_clear_btn()
+
+    def _update_clear_btn(self):
+        """更新清空按钮状态：需要选中子图且子图内有信号。"""
+        subplot_selected = self._selected_subplot is not None
+        has_fields = False
+        if subplot_selected and self._selected_subplot in self._subplot_fields:
+            has_fields = len(self._subplot_fields[self._selected_subplot]) > 0
+        self.clear_btn.setEnabled(subplot_selected and has_fields)
 
 
 class StatsTableWidget(QTableWidget):
