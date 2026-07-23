@@ -114,14 +114,26 @@ FTPA/
 │   └── ftpa/                     # 主包
 │       ├── __init__.py           # 包初始化
 │       ├── main.py               # 主程序入口
-│       ├── data_loader.py        # 数据加载模块
+│       ├── computing/            # 计算子包（重量重心反解、圆拟合）
+│       │   ├── weight_cg.py
+│       │   ├── circle_fit.py
+│       │   └── fuel_data.py
+│       ├── data/                 # 数据加载子包
+│       │   ├── loader.py
+│       │   ├── io.py
+│       │   └── cache.py
+│       ├── statistics/           # 统计子包
+│       │   ├── basic.py
+│       │   ├── multi.py
+│       │   └── event_detection.py
+│       ├── utils/                # 工具子包
+│       │   ├── strings.py
+│       │   └── paths.py
 │       ├── label_map.py          # 标签映射模块
-│       ├── computing.py          # 计算模块
-│       ├── statistics.py         # 统计分析模块
 │       ├── plotting.py           # 可视化模块
 │       ├── constants.py          # 配置常量
 │       ├── time_utils.py         # 时间工具模块
-│       └── utils.py              # 通用工具函数
+│       └── gui/                  # wxPython 图形界面
 │
 ├── tests/                        # 测试目录
 │   ├── __init__.py
@@ -133,6 +145,8 @@ FTPA/
 │   ├── raw/                      # 原始数据
 │   ├── processed/                # 处理后的数据
 │   └── results/                  # 分析结果
+│
+├── testdata/                     # 测试数据文件（git 管理）
 │
 ├── logs/                         # 日志文件目录
 ├── examples/                     # 示例代码目录
@@ -162,27 +176,26 @@ FTPA/
 ```
 原始数据文件 (.txt/.zip)
     ↓
-data_loader.py (数据加载)
+data/ (数据加载子包: loader.py, io.py, cache.py)
     ↓
 label_map.py (标签映射)
     ↓
-computing.py (参数计算)
+computing/ (计算子包: weight_cg.py, circle_fit.py, fuel_data.py)
     ↓
-statistics.py (统计分析)
+statistics/ (统计子包: basic.py, multi.py, event_detection.py)
     ↓
 plotting.py (可视化)
     ↓
 输出结果 (图表/报告)
 ```
 
-### 1. 数据加载层 (data_loader.py)
+### 1. 数据加载层 (data/)
 
 **职责**: 从各种数据源加载试飞数据
 
-- `param_extract()`: 提取参数数据
-- `extract_time()`: 提取时间序列
-- `extract_column_efficient()`: 高效提取单列数据（带模块级缓存）
-- 支持 ZIP 压缩文件自动解压、数据裁剪（trim_head/trim_tail）
+- `loader.py` — `param_extract()`: 提取参数数据；`extract_time()`: 提取时间序列；`extract_column_efficient()`: 高效提取单列数据（带模块级缓存）
+- `io.py` — `read_data_file()`: 通用文件读取；`resolve_zip_file()`: ZIP 自动解压
+- `cache.py` — `FileCache`: 模块级自动缓存管理
 
 ### 2. 标签映射层 (label_map.py)
 
@@ -193,23 +206,21 @@ plotting.py (可视化)
 - `get_var_name()`: 根据标签获取参数名
 - `add()`: 动态添加映射关系
 
-### 3. 计算层 (computing.py)
+### 3. 计算层 (computing/)
 
 **职责**: 执行飞机性能和操稳参数的计算
 
-- `compute_total_weight_rel_cg()`: 基于燃油质量特性表插值 + 力矩平衡反解，计算总重量和相对重心
-- `compute_fitted_circle_radius()`: Taubin 最小二乘圆拟合，计算回转半径
+- `weight_cg.py` — `compute_total_weight_rel_cg()`: 基于燃油质量特性表插值 + 力矩平衡反解，计算总重量和相对重心；`add_weight_cg_to_data()`: 将计算结果合并到数据容器
+- `circle_fit.py` — `compute_fitted_circle_radius()`: Taubin 最小二乘圆拟合，计算回转半径
+- `fuel_data.py` — 1007 机型燃油质量特性表（硬编码常数组）
 
-### 4. 统计分析层 (statistics.py)
+### 4. 统计分析层 (statistics/)
 
 **职责**: 提供数据统计和分析功能
 
-- `compute_stat()`: 单变量统计（start/end/min/max/range/mean/std/points）
-- `compute_var_stats()`: 多变量统计输出
-- `show_group_stats()`: 分组统计
-- `compute_takeoff_landing_stats()`: 起降统计（触水时刻参数）
-- `statistics_params()`: 通用参数统计摘要
-- `crossing_analysis()`: 阈值穿越分析
+- `basic.py` — `compute_stat()`: 单变量统计（start/end/min/max/range/mean/std/points）；`find_crossing_points()`: 基础阈值穿越点查找
+- `multi.py` — `compute_var_stats()`: 多变量统计输出；`show_group_stats()`: 分组统计；`statistics_params()`: 通用参数统计摘要；`crossing_analysis()`: 阈值穿越分析；`generate_data_summary()` / `print_data_summary()`: 整体数据摘要
+- `event_detection.py` — `compute_takeoff_landing_stats()`: 起降统计（触水时刻参数）
 
 ### 5. 可视化层 (plotting.py)
 
@@ -219,12 +230,13 @@ plotting.py (可视化)
 - `plot_time_signals_interactive()`: 交互式时间序列图（带控制面板）
 - `plot_track()`: 航线轨迹地理绘图
 
-### 6. 工具层 (time_utils.py, utils.py)
+### 6. 工具层 (time_utils.py, utils/)
 
 - `select_time_window()`: 时间窗口索引选择
 - `format_time_seconds()`: 数值秒→`HH:MM:SS.mmm` 格式化
 - `make_valid_name()`: 生成合法变量名
 - `column_to_field_name()`: 列名→字段名转换
+- `resolve_excel_path()`: 自动发现标签映射 Excel 文件
 
 ---
 
@@ -313,11 +325,9 @@ pytest --cov=src/ftpa --cov-report=html
 
 ### Git 工作流
 
-- `main`: 稳定版本
-- `develop`: 开发分支
-- `feature/*`: 功能分支
-- `bugfix/*`: 修复分支
-- `release/*`: 发布分支
+- `main`: 稳定版本（对应已发布的 commit）
+- `dev`: 开发主线，所有变更在此推进
+- 阶段性重构或大规模变更在 `dev` 上线性开发，完成后以语义化 commit message 标记
 
 ---
 
