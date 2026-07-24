@@ -152,8 +152,8 @@ def batch_process_files(file_pattern: str,
 
 def batch_analyze_statistics(file_pattern: str,
                             excel_file: str,
-                            time_window: tuple = None,
-                            signals: List[str] = None) -> pd.DataFrame:
+                            time_window: Optional[tuple] = None,
+                            signals: Optional[List[str]] = None) -> pd.DataFrame:
     """
     批量分析多个文件的统计信息
 
@@ -218,7 +218,7 @@ def batch_analyze_statistics(file_pattern: str,
                         file_stats[f'{signal_label}_min'] = min_val
                         file_stats[f'{signal_label}_max'] = max_val
                 except Exception as e:
-                    pass
+                    logger.debug("信号 '%s' 统计计算失败: %s", signal_label, e)
 
             all_stats.append(file_stats)
 

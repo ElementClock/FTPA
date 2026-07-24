@@ -16,11 +16,6 @@ from .cache import _file_cache
 logger = logging.getLogger(__name__)
 
 
-# 向后兼容：旧名称引用
-_read_data_file = read_data_file
-_resolve_zip_file = resolve_zip_file
-
-
 def _trim_data(arr, trim_head=TRIM_HEAD, trim_tail=TRIM_TAIL):
     """
     截取数组头尾（与 MATLAB extractColumnEfficient 一致）
@@ -47,14 +42,21 @@ def param_extract(filename: str) -> dict:
     """
     从数据文件提取所有列到字典（带缓存）
 
-    对应 MATLAB 的 paramExtract 函数
+    对应 MATLAB 的 paramExtract 函数。
+
+    本函数是数据加载的唯一入口，内部同时完成：
+    - 文件读取（仅一次 pd.read_csv）
+    - TIME 列解析为 timedelta64
+    - 数值列内联转换为 float64
+    - 头尾裁剪 (trim)
 
     参数:
         filename: 数据文件路径（支持 .zip 和普通文本）
 
     返回:
-        dict，键为字段名（- 替换为 _），值为 numpy 数组
-        特殊键 'filename' 存储文件路径
+        dict，键为字段名（- 替换为 _），值为 numpy 数组。
+        TIME 键为 timedelta64 数组，数值列已转为 float64。
+        特殊键 'filename' 存储文件路径。
     """
     # 标准化文件路径
     abs_file = os.path.abspath(filename)
@@ -64,7 +66,7 @@ def param_extract(filename: str) -> dict:
     if cached is not None:
         return cached
 
-    # 读取数据文件
+    # 读取数据文件（唯一一次 I/O）
     df = read_data_file(abs_file)
 
     # 获取原始列名
@@ -76,12 +78,28 @@ def param_extract(filename: str) -> dict:
     # 转换列名为合法字段名
     field_names = [column_to_field_name(name) for name in raw_names]
 
-    # 构建数据字典
-    data = {}
+    # TIME 列：内联解析（不再依赖独立的 extract_time 读取）
+    data: dict = {}
+    if 'TIME' in df.columns:
+        time_str = df['TIME'].astype(str)
+        time_str = _trim_data(time_str)
+        if len(time_str) > 0:
+            # MATLAB TIME 格式 "HH:MM:SS:mmm" → "HH:MM:SS.mmm"
+            time_str = time_str.str.replace(r':(\d{3})$', r'.\1', regex=True)
+            data['TIME'] = pd.to_timedelta(time_str).values
+        else:
+            data['TIME'] = np.array([], dtype='timedelta64[ns]')
+
+    # 构建数据字典，数值列直接 float64（内联转换，避免下游重复转换）
     for raw_name, field_name in zip(raw_names, field_names):
-        col_data = df[raw_name].values
-        col_data = _trim_data(col_data)
-        data[field_name] = col_data
+        if raw_name == 'TIME':
+            continue
+        col_data = _trim_data(df[raw_name].values)
+        try:
+            data[field_name] = np.asarray(col_data, dtype=np.float64)
+        except (ValueError, TypeError):
+            # 非数值列保持原样
+            data[field_name] = col_data
 
     # 附加文件名
     data['filename'] = abs_file
@@ -94,9 +112,10 @@ def param_extract(filename: str) -> dict:
 
 def extract_time(filename: str) -> np.ndarray:
     """
-    提取 TIME 列并转换为 Timedelta 数组
+    提取 TIME 列并转换为 Timedelta 数组（向后兼容委托）
 
-    对应 MATLAB 的 extractTime 函数
+    对应 MATLAB 的 extractTime 函数。
+    内部委托给 param_extract()，不再独立读取文件。
 
     参数:
         filename: 数据文件路径
@@ -104,27 +123,8 @@ def extract_time(filename: str) -> np.ndarray:
     返回:
         numpy 数组，dtype=timedelta64[ns]
     """
-    # 读取数据文件
-    abs_file = os.path.abspath(filename)
-    df = read_data_file(abs_file)
-
-    # 提取 TIME 列（字符串格式）
-    time_str = df['TIME'].astype(str)
-
-    # 截取头尾
-    time_str = _trim_data(time_str)
-
-    if len(time_str) == 0:
-        return np.array([], dtype='timedelta64[ns]')
-
-    # 转换格式：MATLAB 的 TIME 格式为 "HH:MM:SS:mmm"
-    # 需要转换为 "HH:MM:SS.mmm" 才能被 pandas 解析
-    time_str = time_str.str.replace(r':(\d{3})$', r'.\1', regex=True)
-
-    # 转换为 Timedelta
-    time_delta = pd.to_timedelta(time_str)
-
-    return time_delta.values
+    data = param_extract(filename)
+    return data.get('TIME', np.array([], dtype='timedelta64[ns]'))
 
 
 def extract_column_efficient(filename: str, col_name: str,
@@ -132,7 +132,8 @@ def extract_column_efficient(filename: str, col_name: str,
     """
     高效提取单列数据（带缓存）
 
-    对应 MATLAB 的 extractColumnEfficient 函数
+    对应 MATLAB 的 extractColumnEfficient 函数。
+    内部委托给 param_extract()，复用其 dict 缓存，避免重复读取文件。
 
     参数:
         filename: 文件路径
@@ -142,30 +143,18 @@ def extract_column_efficient(filename: str, col_name: str,
     返回:
         numpy 数组
     """
-    # 构建缓存键
-    abs_file = os.path.abspath(filename)
-    cache_key = f"{abs_file}|{col_name}|{col_type}"
+    # 复用 param_extract 的缓存 dict
+    data = param_extract(filename)
+    field_name = column_to_field_name(col_name)
 
-    df = _file_cache.get(cache_key)
-    if df is None:
-        df = read_data_file(abs_file)
-        _file_cache.set(cache_key, df)
-
-    # 检查列是否存在
-    if col_name not in df.columns:
-        available = ', '.join(df.columns[:10])
+    if field_name not in data:
+        available = ', '.join(list(data.keys())[:10])
         raise KeyError(f'文件中未找到列 "{col_name}"。可用列（前10个）: {available}')
 
-    # 提取列
+    result = data[field_name]
     if col_type == 'string':
-        data = df[col_name].astype(str).values
-    else:
-        data = df[col_name].values
-
-    # 截取头尾
-    data = _trim_data(data)
-
-    return data
+        return result.astype(str)
+    return result
 
 
 def clear_cache():

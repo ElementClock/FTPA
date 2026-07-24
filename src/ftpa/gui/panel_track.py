@@ -5,7 +5,6 @@ Phase 4: 航线轨迹面板 — 经纬度轨迹图 + 拟合圆半径。
 from __future__ import annotations
 
 import matplotlib
-matplotlib.use("QtAgg")
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
@@ -30,6 +29,10 @@ from ..computing.circle_fit import compute_fitted_circle_radius
 from .services import DataContext
 from .widgets import TimeWindowCtrl
 
+# 确保使用 Qt 后端（仅在 matplotlib 尚未初始化后端时设置）
+if matplotlib.get_backend() == "_agg":
+    matplotlib.use("QtAgg")
+
 
 class TrackPanel(QWidget):
     """航线轨迹面板。"""
@@ -42,6 +45,7 @@ class TrackPanel(QWidget):
         self._build_ui()
 
     def _build_ui(self):
+        """构建轨迹面板 UI：左侧控件（设置+按钮+结果）+ 右侧画布。"""
         layout = QHBoxLayout(self)
 
         # 左侧控件
@@ -83,6 +87,7 @@ class TrackPanel(QWidget):
         layout.addWidget(self.canvas, 3)
 
     def set_data_context(self, ctx: DataContext):
+        """设置数据上下文，自动匹配经纬度字段并填充下拉框。"""
         self.ctx = ctx
         fields = ctx.get_field_names()
         # 自动匹配可能的经纬度字段
@@ -92,6 +97,7 @@ class TrackPanel(QWidget):
         self.lon_combo.addItems(lon_candidates or fields)
 
     def _draw_track(self):
+        """绘制航线轨迹图（经度 vs 纬度），标注起点和终点。"""
         if self.ctx is None:
             return
         lat_field = self.lat_combo.currentText()
@@ -133,6 +139,7 @@ class TrackPanel(QWidget):
         self.result_text.setPlainText(f"轨迹已绘制: {len(lat_arr)} 点")
 
     def _compute_circle(self):
+        """使用 Taubin 圆拟合计算拟合圆半径并显示结果。"""
         if self.ctx is None:
             return
         lat_field = self.lat_combo.currentText()

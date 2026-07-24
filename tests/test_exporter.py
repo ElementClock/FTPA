@@ -43,7 +43,7 @@ class TestExporter:
         }
         
         output_path = str(tmp_path / 'test_output')
-        result_path = export_data(data, output_path, format='parquet')
+        result_path = export_data(data, output_path, output_format='parquet')
         
         assert os.path.exists(result_path)
         assert result_path.endswith('.parquet')

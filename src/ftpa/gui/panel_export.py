@@ -36,6 +36,7 @@ class ExportPanel(QWidget):
         self._build_ui()
 
     def _build_ui(self):
+        """构建导出面板 UI：数据导出、统计导出、数据摘要三个分组。"""
         layout = QVBoxLayout(self)
 
         # --- 数据导出 ---
@@ -94,19 +95,23 @@ class ExportPanel(QWidget):
         layout.addWidget(gb3, 1)
 
     def set_data_context(self, ctx: DataContext):
+        """设置数据上下文。"""
         self.ctx = ctx
 
     def _browse_export(self):
+        """打开文件对话框选择导出路径。"""
         path, _ = QFileDialog.getSaveFileName(self, "保存导出", "", "所有文件 (*)")
         if path:
             self.export_path.setText(path)
 
     def _browse_stat(self):
+        """打开文件对话框选择统计导出路径。"""
         path, _ = QFileDialog.getSaveFileName(self, "保存统计", "", "CSV (*.csv);;JSON (*.json)")
         if path:
             self.stat_path.setText(path)
 
     def _run_export(self):
+        """执行数据导出。"""
         if self.ctx is None:
             return
         fmt = self.export_fmt.currentText()
@@ -122,6 +127,7 @@ class ExportPanel(QWidget):
             self.export_path.setText(f"错误: {e}")
 
     def _run_stat_export(self):
+        """执行统计结果导出。"""
         if self.ctx is None:
             return
         fmt = self.stat_fmt.currentText()
@@ -138,6 +144,7 @@ class ExportPanel(QWidget):
             self.stat_path.setText(f"错误: {e}")
 
     def _run_summary(self):
+        """生成并显示数据摘要表格。"""
         if self.ctx is None:
             return
         try:

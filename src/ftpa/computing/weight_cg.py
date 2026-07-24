@@ -5,15 +5,19 @@
 提供基于燃油插值的总重量和相对重心反解计算。
 """
 
+from __future__ import annotations
+
 import logging
 import numpy as np
-from ..constants import X0, L
+from ..constants import X0, L, BASE_WEIGHT, BASE_REL_CG, BASE_OIL
 from .fuel_data import fuel_rin_oil, fuel_rin_cg_x, fuel_rout_oil, fuel_rout_cg_x
+from ..label_map import LabelMap
 
 logger = logging.getLogger(__name__)
 
 
-def _interp_clamp(oil_arr, cg_arr, oil_val):
+def _interp_clamp(oil_arr: np.ndarray, cg_arr: np.ndarray,
+                  oil_val: np.ndarray | float) -> np.ndarray | float:
     """
     线性插值并钳位到边界
 
@@ -31,8 +35,15 @@ def _interp_clamp(oil_arr, cg_arr, oil_val):
     return np.interp(oil_val, oil_arr, cg_arr)
 
 
-def compute_total_weight_rel_cg(oil_lout, oil_lin, oil_rin, oil_rout,
-                                 base_weight, base_rel_cg, base_oli):
+def compute_total_weight_rel_cg(
+    oil_lout: np.ndarray,
+    oil_lin: np.ndarray,
+    oil_rin: np.ndarray,
+    oil_rout: np.ndarray,
+    base_weight: float,
+    base_rel_cg: float,
+    base_oli: float,
+) -> tuple[np.ndarray, np.ndarray]:
     """
     计算总重量和相对重心
 
@@ -91,7 +102,7 @@ def compute_total_weight_rel_cg(oil_lout, oil_lin, oil_rin, oil_rout,
     return total_weight, rel_cg
 
 
-def add_weight_cg_to_data(data: dict, lm) -> None:
+def add_weight_cg_to_data(data: dict[str, np.ndarray], lm: LabelMap) -> None:
     """
     为数据字典添加重量和重心计算结果（原地修改）
 
@@ -99,8 +110,6 @@ def add_weight_cg_to_data(data: dict, lm) -> None:
         data: 数据字典
         lm: LabelMap 对象，用于通过中文标签查找油箱油量字段
     """
-    from .constants import BASE_WEIGHT, BASE_REL_CG, BASE_OIL
-
     try:
         oil_lout = data.get(lm.get_var_name('Ⅰ号油箱油量'))
         oil_lin = data.get(lm.get_var_name('Ⅱ号油箱油量'))

@@ -4,11 +4,19 @@
 对应 MATLAB: PrivateStatistics/computeTakeoffLandingStats.m
 """
 
+from __future__ import annotations
+
 import numpy as np
 from ..time_utils import time_to_seconds_array, parse_time_to_seconds
+from ..label_map import LabelMap
 
 
-def compute_takeoff_landing_stats(t_start, t_end, data: dict, lm) -> str:
+def compute_takeoff_landing_stats(
+    t_start: float | str,
+    t_end: float | str,
+    data: dict[str, np.ndarray],
+    lm: LabelMap,
+) -> str:
     """
     起降统计（兼容 duration 和数值秒）
 

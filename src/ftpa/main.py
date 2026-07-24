@@ -1,6 +1,9 @@
 """
 主程序：飞机性能操稳数据分析工具
-支持多种运行模式：数据验证、分块读取、完整分析、统计分析
+CLI 入口 — 命令行参数解析与模式分发。
+
+业务逻辑已提取到 pipeline.py，本模块仅保留 CLI 特有功能
+（quick_verify、read_chunked）和 argparse 分发。
 """
 
 import argparse
@@ -10,81 +13,13 @@ import sys
 import time
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 
+from .utils.paths import resolve_path, DEFAULT_TXT_FILE, PROJECT_ROOT
+from .pipeline import full_analysis, interactive_view, stats_analysis
+from .constants import CHUNK_SIZE
+
 logger = logging.getLogger(__name__)
-
-if __package__ in {None, ""}:
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-    from ftpa.data import param_extract, extract_time
-    from ftpa.label_map import LabelMap
-    from ftpa.computing.weight_cg import add_weight_cg_to_data as _add_weight_cg
-    from ftpa.statistics import compute_var_stats, show_group_stats, compute_takeoff_landing_stats
-    from ftpa.plotting import plot_time_signals_interactive
-    from ftpa.time_utils import select_time_window
-    from ftpa.constants import CHUNK_SIZE
-    from ftpa.utils import resolve_excel_path
-else:
-    from .data import param_extract, extract_time
-    from .label_map import LabelMap
-    from .statistics import compute_var_stats, show_group_stats, compute_takeoff_landing_stats
-    from .plotting import plot_time_signals_interactive
-    from .computing.weight_cg import add_weight_cg_to_data as _add_weight_cg
-    from .time_utils import select_time_window
-    from .constants import CHUNK_SIZE
-    from .utils import resolve_excel_path
-
-
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_TXT_FILE = PROJECT_ROOT / "FTPD-AG600-007-QD-260509-G-1-飞机性能操稳-32.txt"
-
-
-def resolve_path(path_value: str | os.PathLike[str] | None, default_path: Path | None = None) -> str:
-    """Resolve an input path relative to the project root when needed."""
-    candidate = path_value
-    if candidate is None:
-        candidate = default_path or DEFAULT_TXT_FILE
-    else:
-        candidate = Path(candidate)
-        if not candidate.is_absolute():
-            for base in (PROJECT_ROOT, Path.cwd()):
-                resolved = (base / candidate).resolve()
-                if resolved.exists():
-                    return str(resolved)
-            candidate = (PROJECT_ROOT / candidate).resolve()
-        else:
-            candidate = candidate.resolve()
-
-    if candidate.exists():
-        return str(candidate)
-
-    fallback_dirs = [PROJECT_ROOT / "data", PROJECT_ROOT / "data" / "raw", PROJECT_ROOT / "data" / "processed", PROJECT_ROOT]
-    for folder in fallback_dirs:
-        if not folder.exists():
-            continue
-        for pattern in ("*.txt", "*.csv", "*.tsv", "*.dat"):
-            matches = sorted(folder.glob(pattern))
-            for match in matches:
-                if match.name.lower() in {"requirements.txt", "pyproject.toml", "readme.md"}:
-                    continue
-                return str(match.resolve())
-
-    return str(candidate)
-
-
-def _load_and_prepare(data_file, excel_file):
-    """加载数据、标签映射、计算重量重心。返回 (data, lm)。"""
-    txt_path = resolve_path(data_file, DEFAULT_TXT_FILE)
-    excel_path = resolve_excel_path(excel_file)
-    if not os.path.exists(excel_path):
-        raise FileNotFoundError(f"标签映射文件不存在: {excel_path}")
-
-    data = param_extract(txt_path)
-    data['TIME'] = extract_time(txt_path)
-    lm = LabelMap(excel_path)
-    _add_weight_cg(data, lm)
-    return data, lm, txt_path
 
 
 def quick_verify(nrows=5, data_file: str | os.PathLike[str] | None = None):
@@ -180,104 +115,6 @@ def read_chunked(chunksize=CHUNK_SIZE, max_chunks=None, data_file: str | os.Path
     return total_rows
 
 
-def full_analysis(data_file: str | os.PathLike[str] | None = None, excel_file: str | os.PathLike[str] | None = None):
-    """
-    完整分析流程：
-    1. 加载数据和标签映射
-    2. 计算重量重心
-    3. 绘制交互图表
-    """
-    print("=" * 70)
-    print("完整分析流程")
-    print("=" * 70)
-
-    # 1-3. 加载数据、标签映射、计算重量重心
-    print("\n[1/3] 加载数据、标签映射、计算重量重心...")
-    start = time.time()
-    data, lm, txt_path = _load_and_prepare(data_file, excel_file)
-    print(f"  数据加载完成: {len(data['TIME'])} 行, {len(data)} 列")
-    avg_w = np.mean(data.get('totalWeight', [0]))
-    avg_cg = np.mean(data.get('relCg', [0]))
-    print(f"  平均总重: {avg_w:.2f} kg | 平均重心: {avg_cg:.2f} %")
-    print(f"  耗时: {time.time() - start:.2f}s")
-    
-    # 定义自定义统计函数
-    def stats_func(t_start, t_end, time_vec, signals, labels):
-        """自定义统计函数，对应 MATLAB myCustomAnalysis"""
-        # 调用起降统计
-        try:
-            stats_str = compute_takeoff_landing_stats(t_start, t_end, data, lm)
-            return [stats_str]
-        except Exception as e:
-            return [f"起降统计错误: {e}"]
-    
-    # 绘制信号
-    signal_ids = [
-        '无线电高度表决值',
-        '指示空速表决值',
-        '俯仰角表决值',
-        '法向过载_I1'
-    ]
-    
-    plot_time_signals_interactive(data, lm, signal_ids, stats_func=stats_func)
-
-
-def interactive_view(data_file: str | os.PathLike[str] | None = None, excel_file: str | os.PathLike[str] | None = None):
-    """启动可交互查看模式，展示多信号时间序列并支持窗口统计与穿越分析。"""
-    print("=" * 70)
-    print("交互式查看模式")
-    print("=" * 70)
-
-    data, lm, _ = _load_and_prepare(data_file, excel_file)
-
-    def stats_func(t_start, t_end, time_vec, signals, labels):
-        try:
-            return [compute_takeoff_landing_stats(t_start, t_end, data, lm)]
-        except Exception as e:
-            return [f'起降统计错误: {e}']
-
-    signal_ids = [
-        '无线电高度表决值',
-        '指示空速表决值',
-        '俯仰角表决值',
-        '法向过载_I1',
-    ]
-
-    plot_time_signals_interactive(data, lm, signal_ids, stats_func=stats_func)
-
-
-def stats_analysis(data_file: str | os.PathLike[str] | None = None, excel_file: str | os.PathLike[str] | None = None):
-    """
-    统计分析流程：
-    1. 加载数据
-    2. 加载标签映射
-    3. 计算重量重心
-    4. 输出统计结果
-    """
-    data, lm, _ = _load_and_prepare(data_file, excel_file)
-
-    print("=" * 70)
-    print("统计分析流程")
-    print("=" * 70)
-    print(f"  数据加载完成: {len(data['TIME'])} 行, {len(data)} 列")
-    print(f"  重量重心计算完成")
-
-    # 输出统计结果
-    start_t = '10:01:00.000'
-    end_t = '10:02:00.000'
-    
-    print(f"\n统计时间区间: {start_t} - {end_t}")
-    
-    # 多变量统计
-    compute_var_stats(
-        data['TIME'], start_t, end_t,
-        data['totalWeight'], '总重', 'start',
-        data['relCg'], '重心', 'start',
-        data['AirSpeed_vote'], '空速表决值', 'start',
-        data['Theta_vote'], '俯仰角表决值', 'range'
-    )
-
-
 def launch_gui(dry_run: bool = False) -> int:
     """启动 PySide6 Qt GUI。"""
     try:
@@ -287,19 +124,12 @@ def launch_gui(dry_run: bool = False) -> int:
         print("请先安装 PySide6，例如：pip install PySide6")
         return 0
 
-    if __package__ in {None, ""}:
-        from ftpa.gui.app import main as gui_main
-    else:
-        from .gui.app import main as gui_main
+    from .gui.app import main as gui_main
     return gui_main(dry_run=dry_run)
 
 
 def main() -> int:
-    # 日志初始化（兼容无包名直接运行）
-    try:
-        from .log_utils import setup_logging
-    except ImportError:
-        from log_utils import setup_logging
+    from .log_utils import setup_logging
     setup_logging(log_file="ftpa.log")
 
     parser = argparse.ArgumentParser(description="飞机性能操稳数据分析工具")
@@ -340,7 +170,7 @@ def main() -> int:
     parser.add_argument(
         "--gui",
         action="store_true",
-        help="启动 wxPython 图形界面"
+        help="启动 PySide6 图形界面"
     )
     parser.add_argument(
         "--dry-run",

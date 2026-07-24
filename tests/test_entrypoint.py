@@ -3,10 +3,11 @@ import sys
 from pathlib import Path
 
 
-def test_main_entrypoint_runs_via_script_path():
+def test_main_entrypoint_via_module_flag():
+    """测试通过 python -m ftpa.main 入口运行。"""
     repo_root = Path(__file__).resolve().parents[1]
     result = subprocess.run(
-        [sys.executable, str(repo_root / "src" / "ftpa" / "main.py"), "--mode", "verify", "--nrows", "1"],
+        [sys.executable, "-m", "ftpa.main", "--mode", "verify", "--nrows", "1"],
         cwd=repo_root,
         capture_output=True,
         text=True,

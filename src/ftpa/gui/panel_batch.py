@@ -43,6 +43,7 @@ class BatchPanel(QWidget):
         self._build_ui()
 
     def _build_ui(self):
+        """构建批量处理面板 UI：文件模式、输出目录、格式选择、操作按钮、结果表格。"""
         layout = QVBoxLayout(self)
 
         # 配置区
@@ -99,19 +100,23 @@ class BatchPanel(QWidget):
         layout.addWidget(self.result_table, 1)
 
     def set_data_context(self, ctx: DataContext):
+        """设置数据上下文（用于获取标签文件路径）。"""
         self.ctx = ctx
 
     def _browse_pattern(self):
+        """打开文件对话框选择批量处理的文件模式。"""
         path, _ = QFileDialog.getOpenFileName(self, "选择文件", "", "文本文件 (*.txt);;所有文件 (*)")
         if path:
             self.pattern_input.setText(path)
 
     def _browse_output(self):
+        """打开目录对话框选择输出目录。"""
         path = QFileDialog.getExistingDirectory(self, "选择输出目录")
         if path:
             self.output_input.setText(path)
 
     def _run_batch_process(self):
+        """启动批量数据处理。"""
         pattern = self.pattern_input.text().strip()
         output = self.output_input.text().strip() or "./output"
         fmt = self.format_combo.currentText()
@@ -119,18 +124,21 @@ class BatchPanel(QWidget):
         self._run_batch("process", pattern, output, fmt, excel_path)
 
     def _run_batch_analyze(self):
+        """启动批量统计分析。"""
         pattern = self.pattern_input.text().strip()
         output = self.output_input.text().strip() or "./output"
         excel_path = self.ctx.excel_path if self.ctx else ""
         self._run_batch("analyze", pattern, output, "csv", excel_path)
 
     def _run_batch_export(self):
+        """启动批量导出摘要。"""
         pattern = self.pattern_input.text().strip()
         output = self.output_input.text().strip() or "./output"
         excel_path = self.ctx.excel_path if self.ctx else ""
         self._run_batch("export", pattern, output, "csv", excel_path)
 
     def _run_batch(self, mode: str, pattern: str, output: str, fmt: str, excel_path: str):
+        """在后台线程中执行批量操作。"""
         self.progress_bar.setVisible(True)
         self.progress_bar.setValue(0)
         self.result_table.setRowCount(0)
@@ -148,6 +156,7 @@ class BatchPanel(QWidget):
         self._batch_thread.start()
 
     def _on_batch_finished(self, results: list[tuple[str, str, int, int, str, str]]):
+        """批量操作完成回调，填充结果表格。"""
         self.progress_bar.setVisible(False)
         self.result_table.setRowCount(len(results))
         for row, (mode, file_name, records, channels, status, note) in enumerate(results):
@@ -177,14 +186,15 @@ class _BatchWorker(QThread):
             self.progress.emit(10)
             if self.mode == "process":
                 res = batch_process_files(self.pattern, self.output, self.excel_path, export_format=self.fmt)
-                for f, info in (res.get("results", {}) if isinstance(res, dict) else {}).items():
+                # res["results"] is a list of dicts, each with 'file', 'status', 'records', 'channels', etc.
+                for info in res.get("results", []):
                     results.append((
                         self.mode,
-                        str(f),
+                        str(info.get("file", "")),
                         info.get("records", 0),
                         info.get("channels", 0),
-                        "成功",
-                        ""
+                        info.get("status", "未知"),
+                        info.get("error", ""),
                     ))
             elif self.mode == "analyze":
                 df = batch_analyze_statistics(self.pattern, self.excel_path)

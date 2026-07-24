@@ -44,6 +44,7 @@ class DataConfigPanel(QWidget):
         self._build_ui()
 
     def _build_ui(self):
+        """构建数据配置面板 UI：文件选择、重量重心参数、操作按钮、信号搜索、数据预览。"""
         layout = QVBoxLayout(self)
 
         # -- 文件配置 --
@@ -120,21 +121,25 @@ class DataConfigPanel(QWidget):
         layout.addWidget(self.preview)
 
     def _browse_data(self):
+        """打开文件对话框选择数据文件。"""
         path, _ = QFileDialog.getOpenFileName(self, "选择数据文件", "", "文本文件 (*.txt);;所有文件 (*)")
         if path:
             self.data_path.setText(path)
 
     def _browse_excel(self):
+        """打开文件对话框选择标签 Excel 文件。"""
         path, _ = QFileDialog.getOpenFileName(self, "选择标签文件", "", "Excel 文件 (*.xlsx *.xls);;所有文件 (*)")
         if path:
             self.excel_path.setText(path)
 
     def _reset_weight_cg(self):
+        """将重量重心参数恢复为默认值。"""
         self.base_w.setValue(int(BASE_WEIGHT))
         self.base_cg.setValue(int(BASE_REL_CG))
         self.base_oil.setValue(int(BASE_OIL))
 
     def _set_status(self, text: str):
+        """更新状态标签文本。"""
         self.status_label.setText(f"状态: {text}")
 
     def _load_data(self):
@@ -146,6 +151,12 @@ class DataConfigPanel(QWidget):
         if not os.path.exists(dp):
             QMessageBox.warning(self, "文件错误", f"数据文件不存在:\n{dp}")
             return
+
+        # 清理上一次加载的线程（防止内存泄漏）
+        old_thread = getattr(self, '_load_thread', None)
+        if old_thread is not None and old_thread.isRunning():
+            old_thread.quit()
+            old_thread.wait(3000)
 
         self._set_status("加载中...")
         self.load_btn.setEnabled(False)
@@ -163,19 +174,16 @@ class DataConfigPanel(QWidget):
         self._load_thread.finished.connect(self._load_thread.deleteLater)
         self._load_thread.start()
 
-    def _on_load_finished(self, ok: bool, msg: str):
+    def _on_load_finished(self, ctx, msg: str):
+        """数据加载完成回调。ctx 为 DataContext 对象或 None。"""
         self.load_btn.setEnabled(True)
         self.verify_btn.setEnabled(True)
 
-        if not ok:
+        if ctx is None:
             self._set_status("加载失败")
             QMessageBox.critical(self, "加载失败", msg)
             return
 
-        from .services import DataContext
-
-        ctx = DataContext()
-        ctx.load(self.data_path.text().strip(), self.excel_path.text().strip())
         self._data_loaded = True
 
         # 填充信号列表
