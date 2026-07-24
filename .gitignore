@@ -59,3 +59,8 @@ Thumbs.db
 *.xlsx
 *.xls
 *.m
+/.trae
+*.txt
+/references
+/testdata
+CLAUDE.md
