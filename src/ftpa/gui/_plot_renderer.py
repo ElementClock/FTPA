@@ -237,4 +237,6 @@ class PlotRenderer:
         w = self.w
         w.ctx = ctx
         self.rebuild_plot()
+        # 记录初始时间范围（供 reset_zoom 恢复）
+        w._crossing.save_initial_time_range()
         w._crossing.update_stats()
