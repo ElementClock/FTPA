@@ -139,3 +139,17 @@ class LabelMap:
         self._orig_list.append(orig_name)
         self._field_list.append(field_name)
         self._label_list.append(label)
+
+    def add_mapping(self, field_name: str, label: str):
+        """运行时添加字段名→标签映射（用于 CSV 列名转换后注入）。
+
+        Args:
+            field_name: 已转换的字段名。
+            label: 对应的中文标签。
+        """
+        self._field2label[field_name] = label
+        self._label2field[label] = field_name
+        if field_name not in self._field_list:
+            self._orig_list.append(field_name)
+            self._field_list.append(field_name)
+            self._label_list.append(label)

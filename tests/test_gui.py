@@ -79,6 +79,52 @@ class TestDataContext:
         ctx = DataContext()
         assert ctx.generate_summary() == {}
 
+    def test_unload_clears_all_state(self):
+        """unload() 应清除所有数据状态。"""
+        ctx = DataContext()
+        # 模拟加载状态
+        ctx.data = {"TIME": np.array([0.0]), "sig": np.array([1.0])}
+        ctx.time_vec = np.array([0.0])
+        ctx.time_sec = np.array([0.0])
+        ctx._loaded = True
+        ctx.data_path = "/some/file.txt"
+        ctx.excel_path = "/some/labels.xlsx"
+        ctx._label_cache = {"sig": "信号"}
+
+        # 卸载
+        ctx.unload()
+
+        assert not ctx.is_loaded
+        assert ctx.data == {}
+        assert ctx.time_vec is None
+        assert ctx.time_sec is None
+        assert ctx.data_path == ""
+        assert ctx.excel_path == ""
+        assert ctx._label_cache is None
+        assert ctx.get_row_count() == 0
+        assert ctx.get_column_count() == 0
+        assert ctx.get_field_names() == []
+
+    def test_unload_idempotent(self):
+        """多次调用 unload() 不应出错。"""
+        ctx = DataContext()
+        ctx.unload()
+        ctx.unload()
+        assert not ctx.is_loaded
+
+    def test_unload_then_load_cycle(self):
+        """卸载后重新加载应正常工作。"""
+        ctx = DataContext()
+        # 模拟加载
+        ctx.data = {"TIME": np.array([0.0]), "sig": np.array([1.0])}
+        ctx._loaded = True
+        # 卸载
+        ctx.unload()
+        assert not ctx.is_loaded
+        # 尝试加载不存在的文件（验证状态可正常切换）
+        ok, msg = ctx.load("/nonexistent/path.txt", "")
+        assert not ok
+
 
 class TestDataContextWithFile:
     """使用临时数据文件测试 DataContext 加载流程。"""

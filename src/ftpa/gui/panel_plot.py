@@ -161,6 +161,11 @@ class PlotCanvasWidget(QWidget):
         """设置数据上下文。"""
         self._renderer.set_data_context(ctx)
 
+    def clear_data_context(self) -> None:
+        """清除数据上下文，清空所有子图和统计。"""
+        self._renderer.set_data_context(None)
+        self.subplot_fields = {i: [] for i in range(len(self.axes))}
+
     # ── 保存截图 ──
 
     def save_screenshot(self, filepath: str | None = None):

@@ -38,4 +38,13 @@ def main(dry_run: bool = False) -> int:
     install_gui_logger(window._append_log)
 
     window.show()
-    return app.exec()
+    rc = app.exec()
+
+    # 显式清理顶层窗口，避免 matplotlib canvas 等 C++ 对象
+    # 在 QApplication 销毁后才被释放，从而引发 0xC0000409 崩溃。
+    window.close()
+    window.deleteLater()
+    app.processEvents()
+    del window
+    app = None
+    return rc

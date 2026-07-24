@@ -249,6 +249,11 @@ class ParameterTreeWidget(QWidget):
             item.setFlags(item.flags() | Qt.ItemIsSelectable)
             self.tree.addTopLevelItem(item)
 
+    def clear_params(self) -> None:
+        """清空参数列表和数据映射。"""
+        self._field_map = {}
+        self.tree.clear()
+
     def update_indicators(self, subplot_fields: dict[int, list[str]]):
         """更新树中每个参数的使用状态指示器。"""
         self._subplot_fields = subplot_fields
