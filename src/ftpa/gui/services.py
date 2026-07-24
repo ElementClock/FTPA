@@ -27,7 +27,7 @@ from ..statistics import (
     statistics_params,
 )
 from ..time_utils import time_to_seconds_array
-from ..utils.paths import column_to_field_name
+from ..utils.strings import column_to_field_name
 
 DATA_DIRS = [
     Path(__file__).resolve().parents[2],  # project root

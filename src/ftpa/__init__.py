@@ -32,6 +32,13 @@ from .batch_processor import (
     batch_analyze_statistics,
     batch_export_summaries
 )
+from .pipeline import (
+    load_and_prepare,
+    full_analysis,
+    interactive_view,
+    stats_analysis,
+    DEFAULT_SIGNAL_IDS,
+)
 
 __all__ = [
     # Data loading
@@ -68,4 +75,10 @@ __all__ = [
     'batch_process_files',
     'batch_analyze_statistics',
     'batch_export_summaries',
+    # Pipeline
+    'load_and_prepare',
+    'full_analysis',
+    'interactive_view',
+    'stats_analysis',
+    'DEFAULT_SIGNAL_IDS',
 ]

@@ -16,11 +16,6 @@ from .cache import _file_cache
 logger = logging.getLogger(__name__)
 
 
-# 向后兼容：旧名称引用
-_read_data_file = read_data_file
-_resolve_zip_file = resolve_zip_file
-
-
 def _trim_data(arr, trim_head=TRIM_HEAD, trim_tail=TRIM_TAIL):
     """
     截取数组头尾（与 MATLAB extractColumnEfficient 一致）

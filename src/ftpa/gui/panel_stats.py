@@ -35,6 +35,7 @@ class StatisticsPanel(QWidget):
         self._build_ui()
 
     def _build_ui(self):
+        """构建统计分析面板 UI：参数统计、穿越分析、起降统计三个子 Tab。"""
         layout = QVBoxLayout(self)
         tabs = QTabWidget()
         layout.addWidget(tabs)
@@ -47,6 +48,7 @@ class StatisticsPanel(QWidget):
         tabs.addTab(self._build_takeoff(), "起降统计")
 
     def set_data_context(self, ctx: DataContext):
+        """设置数据上下文，更新信号选择器。"""
         self.ctx = ctx
         signals = list(ctx.get_field_labels().values())
         # 更新所有信号选择器（由各子面板自行处理）
@@ -54,6 +56,7 @@ class StatisticsPanel(QWidget):
     # ---------- 参数统计 ----------
 
     def _build_param_stats(self) -> QWidget:
+        """构建参数统计子面板：时间窗口 + 信号输入 + 计算按钮 + 结果表格。"""
         panel = QWidget()
         layout = QVBoxLayout(panel)
 
@@ -80,6 +83,7 @@ class StatisticsPanel(QWidget):
         return panel
 
     def _run_param_stats(self):
+        """运行参数统计计算并更新结果表格。"""
         if self.ctx is None:
             return
         t_start, t_end = self.param_time.get_time_range()
@@ -95,6 +99,7 @@ class StatisticsPanel(QWidget):
     # ---------- 穿越分析 ----------
 
     def _build_crossing(self) -> QWidget:
+        """构建穿越分析子面板：主信号 + 关联信号 + 阈值 + 模式 + 结果文本。"""
         panel = QWidget()
         layout = QVBoxLayout(panel)
 
@@ -133,6 +138,7 @@ class StatisticsPanel(QWidget):
         return panel
 
     def _run_crossing(self):
+        """运行穿越分析并显示结果。"""
         if self.ctx is None:
             return
         t_start, t_end = self.cross_time.get_time_range()
@@ -159,6 +165,7 @@ class StatisticsPanel(QWidget):
     # ---------- 起降统计 ----------
 
     def _build_takeoff(self) -> QWidget:
+        """构建起降统计子面板：时间窗口 + 计算按钮 + 结果文本。"""
         panel = QWidget()
         layout = QVBoxLayout(panel)
 
@@ -175,6 +182,7 @@ class StatisticsPanel(QWidget):
         return panel
 
     def _run_takeoff(self):
+        """运行起降统计计算并显示结果。"""
         if self.ctx is None:
             return
         t_start, t_end = self.to_time.get_time_range()

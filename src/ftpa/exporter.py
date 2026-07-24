@@ -4,12 +4,13 @@
 """
 
 import os
+import json
 import numpy as np
 import pandas as pd
 from typing import Dict, Union, Optional
 from datetime import datetime
 from .time_utils import format_duration_chinese
-from .statistics import generate_data_summary  # noqa: F401 — re-exports
+from .statistics import generate_data_summary, print_data_summary  # noqa: F401 — re-exports
 
 
 def export_data(data: Dict[str, np.ndarray],
@@ -24,6 +25,7 @@ def export_data(data: Dict[str, np.ndarray],
         data: 数据字典，包含 TIME 和其他信号
         output_path: 输出文件路径（不含扩展名）
         format: 导出格式，可选 'csv', 'parquet', 'hdf5', 'excel'
+            (注意: 实际参数名为 output_format)
         time_format: 时间格式，'string' 或 'timedelta'
         compression: 压缩方式，如 'gzip', 'snappy'（仅对 parquet 和 csv 有效）
 
@@ -31,7 +33,7 @@ def export_data(data: Dict[str, np.ndarray],
         实际保存的文件路径
 
     示例:
-        >>> export_data(data, 'output/result', format='parquet')
+        >>> export_data(data, 'output/result', output_format='parquet')
         'output/result.parquet'
     """
     # 确保输出目录存在
@@ -109,7 +111,7 @@ def _data_to_dataframe(data: Dict[str, np.ndarray],
 
 def _timedelta_to_string(time_array: np.ndarray) -> np.ndarray:
     """
-    将 timedelta64 数组转换为字符串数组
+    将 timedelta64 数组转换为字符串数组（向量化实现）。
 
     参数:
         time_array: timedelta64 数组
@@ -117,22 +119,26 @@ def _timedelta_to_string(time_array: np.ndarray) -> np.ndarray:
     返回:
         字符串数组，格式为 HH:MM:SS.mmm
     """
-    result = []
-    for td in time_array:
-        # 转换为秒
-        total_seconds = td / np.timedelta64(1, 's')
+    # 一次性转为浮点秒数
+    total_seconds = time_array / np.timedelta64(1, 's')
+    total_seconds = np.asarray(total_seconds, dtype=np.float64)
 
-        # 计算时、分、秒、毫秒
-        hours = int(total_seconds // 3600)
-        minutes = int((total_seconds % 3600) // 60)
-        seconds = int(total_seconds % 60)
-        milliseconds = int((total_seconds % 1) * 1000)
+    # 向量化计算时、分、秒、毫秒
+    hours = np.floor(total_seconds / 3600).astype(np.int32)
+    remainder = total_seconds - hours * 3600
+    minutes = np.floor(remainder / 60).astype(np.int32)
+    remainder = remainder - minutes * 60
+    seconds = np.floor(remainder).astype(np.int32)
+    milliseconds = np.round((remainder - seconds) * 1000).astype(np.int32)
 
-        # 格式化为字符串
-        time_str = f"{hours:02d}:{minutes:02d}:{seconds:02d}.{milliseconds:03d}"
-        result.append(time_str)
-
-    return np.array(result)
+    # 向量化格式化
+    result = np.char.zfill(hours.astype(str), 2)
+    result = np.char.add(result, np.char.zfill(minutes.astype(str), 2).astype(str))
+    # 逐元素拼接更可靠（np.char 对长链拼接有兼容性问题）
+    return np.array([
+        f"{h:02d}:{m:02d}:{s:02d}.{ms:03d}"
+        for h, m, s, ms in zip(hours, minutes, seconds, milliseconds)
+    ])
 
 
 def export_statistics(stats: Dict, output_path: str, output_format: str = 'csv') -> str:
@@ -160,7 +166,6 @@ def export_statistics(stats: Dict, output_path: str, output_format: str = 'csv')
 
     elif output_format == 'json':
         file_path = f"{output_path}_stats.json"
-        import json
         with open(file_path, 'w', encoding='utf-8') as f:
             json.dump(stats, f, ensure_ascii=False, indent=2)
 
@@ -169,44 +174,3 @@ def export_statistics(stats: Dict, output_path: str, output_format: str = 'csv')
 
     print(f"统计结果已导出到: {file_path}")
     return file_path
-
-
-def print_data_summary(data: Dict[str, np.ndarray]):
-    """
-    打印数据统计摘要
-
-    参数:
-        data: 数据字典
-    """
-    summary = generate_data_summary(data)
-
-    print("=" * 70)
-    print("数据统计摘要")
-    print("=" * 70)
-    print(f"总记录数: {summary['total_records']:,}")
-    print(f"通道数量: {summary['total_channels']}")
-    print()
-
-    if summary['time_range']:
-        print("时间范围:")
-        print(f"  起始: {summary['time_range']['start']}")
-        print(f"  结束: {summary['time_range']['end']}")
-        print(f"  时长: {summary['time_range']['duration_formatted']}")
-        print(f"       ({summary['time_range']['duration_seconds']:.2f} 秒)")
-        print()
-
-    print("通道统计:")
-    print(f"  {'通道名':<30} {'最小值':>12} {'最大值':>12} {'平均值':>12} {'标准差':>12}")
-    print("  " + "-" * 80)
-
-    # 按通道名排序
-    sorted_channels = sorted(summary['channels'].items())
-
-    for channel_name, stats in sorted_channels[:20]:  # 只显示前20个
-        print(f"  {channel_name:<30} {stats['min']:>12.4f} {stats['max']:>12.4f} "
-              f"{stats['mean']:>12.4f} {stats['std']:>12.4f}")
-
-    if len(sorted_channels) > 20:
-        print(f"  ... 还有 {len(sorted_channels) - 20} 个通道")
-
-    print("=" * 70)

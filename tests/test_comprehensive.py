@@ -6,6 +6,8 @@
 import numpy as np
 import pandas as pd
 import sys
+import tempfile
+import os
 from pathlib import Path
 
 # 添加项目根目录到路径
@@ -57,7 +59,8 @@ def test_label_map():
         '中文名称': ['时间', '空速', '高度']
     }
     df = pd.DataFrame(test_data)
-    test_excel = 'test_label_map.xlsx'
+    tmp_dir = tempfile.mkdtemp()
+    test_excel = os.path.join(tmp_dir, 'test_label_map.xlsx')
     df.to_excel(test_excel, index=False)
     
     try:
@@ -82,8 +85,10 @@ def test_label_map():
         print("[PASS][PASS][PASS] label_map.py 所有测试通过")
     finally:
         # 清理测试文件
+        import shutil
         if Path(test_excel).exists():
             Path(test_excel).unlink()
+        shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
 def test_time_utils():
@@ -235,7 +240,8 @@ def test_data_loader():
     print("="*70)
     
     # 创建测试数据文件（需要至少 100 行以避免被截取）
-    test_file = 'test_data.txt'
+    tmp_dir2 = tempfile.mkdtemp()
+    test_file = os.path.join(tmp_dir2, 'test_data.txt')
     with open(test_file, 'w', encoding='utf-8') as f:
         f.write("TIME\tCol1\tCol2\n")
         for i in range(150):
@@ -261,8 +267,10 @@ def test_data_loader():
         print("[PASS][PASS][PASS] data_loader.py 所有测试通过")
     finally:
         # 清理测试文件
+        import shutil
         if Path(test_file).exists():
             Path(test_file).unlink()
+        shutil.rmtree(tmp_dir2, ignore_errors=True)
 
 
 def test_plotting():

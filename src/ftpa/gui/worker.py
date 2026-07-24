@@ -6,16 +6,7 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import QObject, QThread, Signal
-
-
-class WorkerSignals(QObject):
-    """工作线程的信号集合。"""
-
-    progress = Signal(int, str)  # (percent, message)
-    result = Signal(object)  # 执行结果
-    error = Signal(str)  # 错误消息
-    finished = Signal()
+from PySide6.QtCore import QObject, Signal
 
 
 class DataLoaderWorker(QObject):

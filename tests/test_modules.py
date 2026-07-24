@@ -4,6 +4,8 @@
 
 import sys
 import numpy as np
+import matplotlib
+matplotlib.use('Agg')  # 非交互式后端，防止 plt.show() 阻塞
 import matplotlib.pyplot as plt
 from pathlib import Path
 

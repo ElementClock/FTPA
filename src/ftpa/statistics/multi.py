@@ -2,20 +2,24 @@
 多变量统计和穿越分析函数
 """
 
+from __future__ import annotations
+
 import numpy as np
-from typing import Optional, Dict
+from typing import Optional, Dict, List, Union
 from ..time_utils import select_time_window, format_time_seconds, format_duration_chinese
 from .basic import compute_stat, find_crossing_points
+from ..label_map import LabelMap
 
 
-def _format_stat_value(val):
+def _format_stat_value(val: Union[int, float, np.number, str]) -> str:
     """格式化统计值，数值用 g 格式，其他转为字符串"""
     if isinstance(val, (int, float, np.number)):
         return f'{val:.6g}'
     return str(val)
 
 
-def _compute_var_stats_data(time_vec, start_t, end_t, *var_args):
+def _compute_var_stats_data(time_vec: np.ndarray, start_t: Union[float, str],
+                            end_t: Union[float, str], *var_args) -> tuple:
     """
     对多个变量在指定时间区间内计算统计值，返回结构化数据（不打印）
 
@@ -57,7 +61,8 @@ def _compute_var_stats_data(time_vec, start_t, end_t, *var_args):
     return var_names, descs, vals, actual_start, actual_end
 
 
-def compute_var_stats(time_vec, start_t, end_t, *var_args):
+def compute_var_stats(time_vec: np.ndarray, start_t: Union[float, str],
+                      end_t: Union[float, str], *var_args) -> None:
     """
     对多个变量在指定时间区间内计算统计值并打印
 
@@ -84,7 +89,8 @@ def compute_var_stats(time_vec, start_t, end_t, *var_args):
         print(f'{var_names[i]}\t{descs[i]}\t{_format_stat_value(vals[i])}')
 
 
-def _show_group_stats_data(time_vec, start_t, end_t, *group_args):
+def _show_group_stats_data(time_vec: np.ndarray, start_t: Union[float, str],
+                           end_t: Union[float, str], *group_args) -> list:
     """
     对多组同类变量计算统计量，返回结构化数据（不打印）
 
@@ -135,7 +141,8 @@ def _show_group_stats_data(time_vec, start_t, end_t, *group_args):
     return results
 
 
-def show_group_stats(time_vec, start_t, end_t, *group_args):
+def show_group_stats(time_vec: np.ndarray, start_t: Union[float, str],
+                      end_t: Union[float, str], *group_args) -> None:
     """
     对多组同类变量计算统计量，并以紧凑的"名/值"格式输出
 
@@ -157,8 +164,9 @@ def show_group_stats(time_vec, start_t, end_t, *group_args):
         print(f'{name_str}\t{desc}\t{val_str}')
 
 
-def statistics_params(t_start, t_end, data: dict, lm,
-                      signal_ids: Optional[list] = None) -> list:
+def statistics_params(t_start: Union[float, str], t_end: Union[float, str],
+                      data: Dict[str, np.ndarray], lm: LabelMap,
+                      signal_ids: Optional[List[str]] = None) -> List[str]:
     """
     计算指定时间窗口内 data 中信号的统计摘要
 
@@ -239,8 +247,10 @@ def statistics_params(t_start, t_end, data: dict, lm,
     return lines
 
 
-def crossing_analysis(data: dict, lm, signal_ids: list, mode: str,
-                      threshold: float, t_start, t_end) -> list:
+def crossing_analysis(data: Dict[str, np.ndarray], lm: LabelMap,
+                      signal_ids: List[str], mode: str,
+                      threshold: float, t_start: Union[float, str],
+                      t_end: Union[float, str]) -> List[str]:
     """
     统计主信号在指定窗口内穿越阈值时，其他信号的值
 

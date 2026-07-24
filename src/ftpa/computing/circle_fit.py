@@ -5,6 +5,8 @@
 提供基于经纬度轨迹的最小二乘拟合圆半径计算。
 """
 
+from __future__ import annotations
+
 import logging
 import numpy as np
 from scipy.linalg import eig
@@ -13,7 +15,13 @@ from ..time_utils import select_time_window
 logger = logging.getLogger(__name__)
 
 
-def compute_fitted_circle_radius(time_vec, start_t, end_t, longitude, latitude):
+def compute_fitted_circle_radius(
+    time_vec: np.ndarray,
+    start_t: float | str,
+    end_t: float | str,
+    longitude: np.ndarray,
+    latitude: np.ndarray,
+) -> float:
     """
     计算给定时间窗口内经纬度轨迹的最小二乘拟合圆半径（米）
 
@@ -63,7 +71,7 @@ def compute_fitted_circle_radius(time_vec, start_t, end_t, longitude, latitude):
     return R
 
 
-def _taubin_circle_fit(x, y):
+def _taubin_circle_fit(x: np.ndarray, y: np.ndarray) -> tuple[float, float, float]:
     """
     Taubin 最小二乘圆拟合算法
 

@@ -47,6 +47,7 @@ from PySide6.QtWidgets import (
 from .panel_plot import PlotCanvasWidget
 from .services import DataContext
 from .widgets import ParameterTreeWidget
+from .. import __version__
 
 import logging
 logger = logging.getLogger(__name__)
@@ -242,7 +243,7 @@ class MainWindow(QMainWindow):
             "关于 FTPA",
             "FTPA - 飞机性能操稳数据分析系统\n\n"
             "AG600 试飞数据处理工具\n"
-            "版本 1.1.0"
+            "版本 " + __version__
         )
 
     # ── 布局切换 ──
@@ -380,6 +381,12 @@ class MainWindow(QMainWindow):
         if not os.path.exists(data_path):
             QMessageBox.warning(self, "文件错误", f"数据文件不存在:\n{data_path}")
             return
+
+        # 清理上一次加载的线程（防止内存泄漏）
+        old_thread = getattr(self, '_load_thread', None)
+        if old_thread is not None and old_thread.isRunning():
+            old_thread.quit()
+            old_thread.wait(3000)
 
         self.status_bar.showMessage("加载中...")
         self.apply_btn.setEnabled(False)

@@ -198,14 +198,14 @@ class TestTimeUtils:
         seconds = time_to_seconds_array(time_vec)
         assert np.array_equal(seconds, [0, 1, 2, 3])
     
-    def testparse_time_to_seconds(self):
+    def test_parse_time_to_seconds(self):
         """测试时间字符串转秒数"""
         assert parse_time_to_seconds("00:00:00") == 0
         assert parse_time_to_seconds("00:01:00") == 60
         assert parse_time_to_seconds("01:00:00") == 3600
         assert parse_time_to_seconds("01:01:01.500") == 3661.5
-    
-    def testparse_time_to_seconds_numeric(self):
+
+    def test_parse_time_to_seconds_numeric(self):
         """测试数值时间转秒数"""
         assert parse_time_to_seconds(100) == 100
         assert parse_time_to_seconds(3661.5) == 3661.5

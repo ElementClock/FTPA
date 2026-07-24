@@ -1,6 +1,7 @@
 """Visualization module."""
 
 import os
+import threading
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.widgets import Button, RadioButtons, TextBox
@@ -10,46 +11,48 @@ from typing import Optional, Callable
 
 _FONT_CONFIGURED = False
 _FONT_CACHED = None
+_FONT_LOCK = threading.Lock()
 
 
 def _configure_display_font():
-    """Configure CJK font once, lazily."""
+    """Configure CJK font once, lazily (thread-safe)."""
     global _FONT_CONFIGURED, _FONT_CACHED
-    if _FONT_CONFIGURED:
-        return _FONT_CACHED
-    _FONT_CONFIGURED = True
+    with _FONT_LOCK:
+        if _FONT_CONFIGURED:
+            return _FONT_CACHED
 
-    preferred_fonts = [
-        'Microsoft YaHei Light',
-        'Microsoft YaHei',
-        'SimHei',
-        'Arial Unicode MS',
-        'Noto Sans CJK SC',
-        'WenQuanYi Zen Hei',
-        'DejaVu Sans',
-    ]
+        preferred_fonts = [
+            'Microsoft YaHei Light',
+            'Microsoft YaHei',
+            'SimHei',
+            'Arial Unicode MS',
+            'Noto Sans CJK SC',
+            'WenQuanYi Zen Hei',
+            'DejaVu Sans',
+        ]
 
-    available_fonts = set()
-    try:
-        import matplotlib.font_manager as fm
-        available_fonts = {font.name for font in fm.fontManager.ttflist}
-    except Exception:
         available_fonts = set()
+        try:
+            import matplotlib.font_manager as fm
+            available_fonts = {font.name for font in fm.fontManager.ttflist}
+        except Exception:
+            available_fonts = set()
 
-    selected_font = None
-    for font_name in preferred_fonts:
-        if font_name in available_fonts:
-            selected_font = font_name
-            break
+        selected_font = None
+        for font_name in preferred_fonts:
+            if font_name in available_fonts:
+                selected_font = font_name
+                break
 
-    if selected_font is None:
-        selected_font = 'DejaVu Sans'
+        if selected_font is None:
+            selected_font = 'DejaVu Sans'
 
-    plt.rcParams['font.family'] = 'sans-serif'
-    plt.rcParams['font.sans-serif'] = [selected_font, 'DejaVu Sans', 'Arial']
-    plt.rcParams['axes.unicode_minus'] = False
-    _FONT_CACHED = selected_font
-    return selected_font
+        plt.rcParams['font.family'] = 'sans-serif'
+        plt.rcParams['font.sans-serif'] = [selected_font, 'DejaVu Sans', 'Arial']
+        plt.rcParams['axes.unicode_minus'] = False
+        _FONT_CACHED = selected_font
+        _FONT_CONFIGURED = True
+        return selected_font
 
 
 def plot_time_signals(time_vec, signals, labels, time_range=None):
@@ -160,7 +163,7 @@ def plot_time_signals_interactive(data: dict, lm, signal_ids: list,
         # 获取中文标签
         try:
             label = lm.get_label(field)
-        except:
+        except Exception:
             label = field  # 回退到字段名
         labels.append(label)
     
