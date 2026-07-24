@@ -372,7 +372,8 @@ class MainWindow(QMainWindow):
 
     def _do_load(self, data_path: str, excel_path: str):
         """后台线程加载数据。"""
-        from .worker import DataLoaderWorker, QThread
+        from .worker import DataLoaderWorker
+        from PySide6.QtCore import QThread
 
         logger.info("开始加载: data_path=%s", data_path)
         logger.info("  os.path.exists(data_path)=%s", os.path.exists(data_path))

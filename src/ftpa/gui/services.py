@@ -13,7 +13,7 @@ import numpy as np
 from ..computing.weight_cg import add_weight_cg_to_data
 from ..computing import compute_fitted_circle_radius
 from ..constants import BASE_OIL, BASE_REL_CG, BASE_WEIGHT
-from ..data import extract_time, param_extract
+from ..data import param_extract
 from ..exporter import (
     export_data,
     export_statistics,
@@ -65,7 +65,11 @@ class DataContext:
         return str(p.resolve())
 
     def load(self, data_path: str, excel_path: str) -> tuple[bool, str]:
-        """加载数据和标签映射。返回 (ok, error_msg)。"""
+        """加载数据和标签映射。返回 (ok, error_msg)。
+
+        param_extract() 已内联 TIME 解析和 float64 转换，
+        本方法不再需要单独调用 extract_time() 或做 float64 循环。
+        """
         self.data_path = data_path
         self.excel_path = excel_path
 
@@ -75,7 +79,6 @@ class DataContext:
 
         try:
             raw = param_extract(data_path)
-            raw["TIME"] = extract_time(data_path)
             self.data = raw
             self.time_vec = raw["TIME"]
             self.time_sec = time_to_seconds_array(self.time_vec)
@@ -88,12 +91,6 @@ class DataContext:
                     self.lm = None
             else:
                 self.lm = None
-
-            # 预转换所有数值列为 float64，避免下游重复转换
-            for k in list(self.data.keys()):
-                if k not in ("TIME", "filename"):
-                    arr = np.asarray(self.data[k], dtype=float)
-                    self.data[k] = arr
 
             # 重置缓存
             self._label_cache = None

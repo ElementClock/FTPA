@@ -8,7 +8,7 @@ from pathlib import Path
 from ..constants import EXCEL_FILENAME
 
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
+PROJECT_ROOT = Path(__file__).resolve().parents[3]  # src/ftpa/utils/ → 项目根目录
 DEFAULT_TXT_FILE = PROJECT_ROOT / "FTPD-AG600-007-QD-260509-G-1-飞机性能操稳-32.txt"
 
 
@@ -38,7 +38,7 @@ def resolve_path(path_value: str | os.PathLike[str] | None, default_path: Path |
     if candidate.exists():
         return str(candidate)
 
-    fallback_dirs = [PROJECT_ROOT / "data", PROJECT_ROOT / "data" / "raw", PROJECT_ROOT / "data" / "processed", PROJECT_ROOT]
+    fallback_dirs = [PROJECT_ROOT / "testdata", PROJECT_ROOT / "data", PROJECT_ROOT / "data" / "raw", PROJECT_ROOT / "data" / "processed", PROJECT_ROOT]
     for folder in fallback_dirs:
         if not folder.exists():
             continue
@@ -63,7 +63,7 @@ def resolve_excel_path(excel_path: str | None = None) -> str:
 
     matlab/ 是迁移参考文件夹，不列入搜索路径。
     """
-    project_root = Path(__file__).resolve().parents[2]
+    project_root = Path(__file__).resolve().parents[3]  # src/ftpa/utils/ → 项目根目录
 
     # 1. 显式路径
     if excel_path:
@@ -80,6 +80,8 @@ def resolve_excel_path(excel_path: str | None = None) -> str:
     # 2. 已知位置搜索
     search_dirs = [
         project_root / "data",
+        project_root / "testdata",
+        project_root / "src" / "ftpa" / "data",
         project_root,
     ]
     for d in search_dirs:

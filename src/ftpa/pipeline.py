@@ -15,7 +15,7 @@ from typing import Callable
 
 import numpy as np
 
-from .data import param_extract, extract_time
+from .data import param_extract
 from .label_map import LabelMap
 from .computing.weight_cg import add_weight_cg_to_data
 from .statistics import compute_var_stats, show_group_stats, compute_takeoff_landing_stats
@@ -63,7 +63,7 @@ def load_and_prepare(
         raise FileNotFoundError(f"标签映射文件不存在: {excel_path}")
 
     data = param_extract(txt_path)
-    data['TIME'] = extract_time(txt_path)
+    # param_extract 已内联 TIME 解析，无需再调用 extract_time
     lm = LabelMap(excel_path)
     add_weight_cg_to_data(data, lm)
     return data, lm, txt_path
