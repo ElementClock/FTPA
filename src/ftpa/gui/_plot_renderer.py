@@ -25,6 +25,7 @@ from PySide6.QtGui import QAction
 from PySide6.QtWidgets import QMenu, QMessageBox
 
 from ..time_utils import format_time_seconds
+from ._layout_ctrl import LayoutController
 from ._downsampler import min_max_downsample, DOWNSAMPLE_THRESHOLD
 
 if TYPE_CHECKING:
@@ -245,23 +246,21 @@ class PlotRenderer:
     def _apply_axis_decorations(self) -> None:
         """应用 X 轴标签和时间格式化器（不触发重绘）。"""
         w = self.w
-        if w._layout_mode == "4x1":
-            w.axes[-1].set_xlabel("时间 (s)")
-        elif w._layout_mode == "1x1":
-            w.axes[0].set_xlabel("时间 (s)")
-        elif w._layout_mode == "2x2":
-            for i in [2, 3]:
-                w.axes[i].set_xlabel("时间 (s)")
+        mode = w._layout_mode
 
-        bottom_axes = []
-        if w._layout_mode == "4x1":
-            bottom_axes = [w.axes[-1]]
-        elif w._layout_mode == "1x1":
-            bottom_axes = [w.axes[0]]
-        elif w._layout_mode == "2x2":
-            bottom_axes = [w.axes[i] for i in [2, 3]]
-        for ax in bottom_axes:
-            ax.xaxis.set_major_formatter(FuncFormatter(
+        # 确定底部子图索引
+        bottom_indices: list[int] = []
+        if mode == "2x2":
+            bottom_indices = [2, 3]
+        elif mode == "1x1":
+            bottom_indices = [0]
+        else:
+            # Nx1 模式（2x1, 3x1, 4x1）：仅最底部一个子图
+            bottom_indices = [len(w.axes) - 1]
+
+        for i in bottom_indices:
+            w.axes[i].set_xlabel("时间 (s)")
+            w.axes[i].xaxis.set_major_formatter(FuncFormatter(
                 lambda s, _: format_time_seconds(float(s))))
 
     # ── 信号管理 ──
@@ -282,7 +281,7 @@ class PlotRenderer:
             return
 
         # 检查子图容量
-        max_per_plot = {"1x1": 0, "4x1": 5, "2x2": 4}.get(w._layout_mode, 5)
+        max_per_plot = LayoutController.LAYOUT_CONFIG.get(w._layout_mode, (0, 5))[1]
         if max_per_plot > 0 and len(w.subplot_fields.get(idx, [])) >= max_per_plot:
             w.log_message.emit(f"子图 {idx + 1} 已达到最大信号数 ({max_per_plot})")
             return
@@ -360,7 +359,7 @@ class PlotRenderer:
     def _add_to_subplot(self, idx: int, field: str) -> None:
         """右键菜单：添加信号 field 到指定子图 idx。"""
         w = self.w
-        max_per_plot = {"1x1": 0, "4x1": 5, "2x2": 4}.get(w._layout_mode, 5)
+        max_per_plot = LayoutController.LAYOUT_CONFIG.get(w._layout_mode, (0, 5))[1]
         if max_per_plot > 0 and len(w.subplot_fields.get(idx, [])) >= max_per_plot:
             QMessageBox.information(w, "提示", f"子图 {idx + 1} 已达到最大信号数 ({max_per_plot})。")
             return

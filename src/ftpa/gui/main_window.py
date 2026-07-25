@@ -92,14 +92,32 @@ class MainWindow(QMainWindow):
         self.param_tree.remove_clicked.connect(self._on_remove_param)
         self.param_tree.clear_clicked.connect(self._on_clear_param)
 
-        splitter = QSplitter(Qt.Horizontal)
-        splitter.addWidget(self.plot_widget)
-        splitter.addWidget(self.param_tree)
-        splitter.setStretchFactor(0, 3)
-        splitter.setStretchFactor(1, 1)
-        splitter.setSizes([900, 300])
+        self._splitter = QSplitter(Qt.Horizontal)
+        self._splitter.addWidget(self.plot_widget)
+        self._splitter.addWidget(self.param_tree)
+        self._splitter.setStretchFactor(0, 5)
+        self._splitter.setStretchFactor(1, 1)
+        self._splitter.setCollapsible(0, False)   # 绘图区不可折叠
+        self._splitter.setCollapsible(1, True)    # 参数面板可折叠
 
-        grid.addWidget(splitter, 1, 0, 1, 2)
+        # 参数面板最小宽度：控制面板在小于此宽度时自动隐藏
+        # 默认阈值 50px（约为 QSplitter 默认折叠阈值 ~150px 的 1/3）
+        self._PANEL_COLLAPSE_THRESHOLD = 50
+        self.param_tree.setMinimumWidth(30)  # 允许拖拽到很窄但仍可见
+        self._splitter.splitterMoved.connect(self._on_splitter_moved)
+
+        # 从 QSettings 恢复用户上次的分隔条尺寸，首次使用默认值
+        settings = QSettings("FTPA", "FTPA")
+        saved_sizes = settings.value("splitter_sizes")
+        if saved_sizes is not None:
+            try:
+                self._splitter.setSizes([int(s) for s in saved_sizes])
+            except (ValueError, TypeError):
+                self._splitter.setSizes([960, 160])
+        else:
+            self._splitter.setSizes([960, 160])
+
+        grid.addWidget(self._splitter, 1, 0, 1, 2)
         grid.setRowStretch(1, 1)  # Row 1 占据所有剩余空间
 
         # === Row 2: 控制面板 ===
@@ -227,15 +245,22 @@ class MainWindow(QMainWindow):
         # 视图
         self._menu_layout_actions = {}
         menu_view = menubar.addMenu("视图")
-        for mode, text in [("1x1", "1×1"), ("4x1", "4×1"), ("2x2", "2×2")]:
+        for mode, text in [("1x1", "1×1"), ("2x1", "2×1"), ("3x1", "3×1"),
+                           ("4x1", "4×1"), ("2x2", "2×2")]:
             act = QAction(text, self)
             act.setCheckable(True)
-            act.setChecked(mode == "4x1")
+            act.setChecked(mode == "1x1")
             act.triggered.connect(lambda _, m=mode: self._switch_layout(m))
             self._menu_layout_actions[mode] = act
             menu_view.addAction(act)
 
         menu_view.addSeparator()
+
+        act_panel = QAction("参数面板", self)
+        act_panel.setCheckable(True)
+        act_panel.setChecked(True)
+        act_panel.triggered.connect(self._toggle_param_panel)
+        menu_view.addAction(act_panel)
 
         act_status = QAction("状态栏", self)
         act_status.setCheckable(True)
@@ -266,6 +291,31 @@ class MainWindow(QMainWindow):
         # 同步菜单项状态
         for m, act in self._menu_layout_actions.items():
             act.setChecked(m == mode)
+
+    # ── 分隔条面板折叠 ──
+
+    def _on_splitter_moved(self, pos: int, index: int):
+        """分隔条移动时检测右侧面板是否需要自动隐藏/显示。"""
+        sizes = self._splitter.sizes()
+        if len(sizes) < 2:
+            return
+        panel_width = sizes[1]
+        if panel_width < self._PANEL_COLLAPSE_THRESHOLD and self.param_tree.isVisible():
+            self.param_tree.hide()
+            self.status_bar.showMessage("参数面板已隐藏，点击菜单「视图 → 参数面板」恢复", 3000)
+        elif panel_width >= self._PANEL_COLLAPSE_THRESHOLD and not self.param_tree.isVisible():
+            self.param_tree.show()
+
+    def _toggle_param_panel(self, visible: bool):
+        """切换参数面板的显示/隐藏。"""
+        if visible and not self.param_tree.isVisible():
+            self.param_tree.show()
+            # 恢复到合理宽度
+            sizes = self._splitter.sizes()
+            total = sum(sizes) if sizes else 1120
+            self._splitter.setSizes([int(total * 0.85), int(total * 0.15)])
+        elif not visible and self.param_tree.isVisible():
+            self.param_tree.hide()
 
     # ── 子图选择 ──
 
@@ -305,20 +355,36 @@ class MainWindow(QMainWindow):
         self.param_tree.update_indicators(self.plot_widget.subplot_fields)
 
     def _update_master_combo(self):
-        """更新主穿越信号下拉框。"""
-        current = self.master_combo.currentText()
+        """更新主穿越信号下拉框（显示中文标签）。"""
+        current_text = self.master_combo.currentText()
         self.master_combo.clear()
+        self._combo_label_to_field: dict[str, str] = {}
+
         fields_set: set[str] = set()
         for flist in self.plot_widget.subplot_fields.values():
             fields_set.update(flist)
-        sorted_fields = sorted(fields_set)
-        if sorted_fields:
-            self.master_combo.addItems(sorted_fields)
-            self.master_combo.setEnabled(True)
-            if current in sorted_fields:
-                self.master_combo.setCurrentText(current)
-        else:
+
+        if not fields_set:
             self.master_combo.setEnabled(False)
+            return
+
+        # 按 display_label 排序，建立反向映射
+        ctx = self.data_context
+        label_field_pairs: list[tuple[str, str]] = []
+        for f in fields_set:
+            label = ctx.get_label(f) if ctx else f
+            label_field_pairs.append((label, f))
+        label_field_pairs.sort(key=lambda x: x[0])
+
+        for label, field in label_field_pairs:
+            self._combo_label_to_field[label] = field
+            self.master_combo.addItem(label)
+
+        self.master_combo.setEnabled(True)
+
+        # 恢复之前的选中项
+        if current_text in self._combo_label_to_field:
+            self.master_combo.setCurrentText(current_text)
 
     # ── 穿越控制 ──
 
@@ -328,7 +394,9 @@ class MainWindow(QMainWindow):
         left_mode = self.left_mode.currentText()
         right_val = float(self.right_threshold.text() or 0)
         right_mode = self.right_mode.currentText()
-        master = self.master_combo.currentText()
+        # 从中文标签反查 field_name
+        master_label = self.master_combo.currentText()
+        master = self._combo_label_to_field.get(master_label, master_label)
         if not master:
             self._append_log("请先选择主穿越信号")
             return
@@ -568,6 +636,13 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event):
         """窗口关闭时清理后台线程与绘图资源，避免 C++ 对象退出时崩溃。"""
+        # 保存分隔条尺寸到 QSettings（用户下次启动恢复）
+        try:
+            settings = QSettings("FTPA", "FTPA")
+            settings.setValue("splitter_sizes", self._splitter.sizes())
+        except Exception:
+            pass
+
         # 停止数据加载线程
         thread = getattr(self, '_load_thread', None)
         if thread is not None:

@@ -73,13 +73,13 @@ class PlotCanvasWidget(QWidget):
         self.ctx: DataContext | None = None
 
         # 动态子图管理（共享状态）
-        self._layout_mode: str = "4x1"  # "1x1" | "4x1" | "2x2"
+        self._layout_mode: str = "1x1"  # "1x1" | "2x1" | "3x1" | "4x1" | "2x2"
         self.figure = Figure(figsize=(10, 6))
         self.canvas = FigureCanvas(self.figure)
         self.axes: list[plt.Axes] = []
 
         # 子图信号分配: 子图索引 -> field_name 列表
-        self.subplot_fields: dict[int, list[str]] = {i: [] for i in range(4)}
+        self.subplot_fields: dict[int, list[str]] = {0: []}
 
         # 子图选择
         self._selected_subplot_idx: int | None = None
