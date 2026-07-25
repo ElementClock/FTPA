@@ -63,6 +63,8 @@ class PlotCanvasWidget(QWidget):
 
     # 子图选中信号（发送子图索引，0-based）
     subplot_selected = Signal(object)  # int | None
+    # 拖放参数添加信号（通知 MainWindow 更新指示器）
+    param_dropped = Signal(str)       # 参数 field_name
     # 日志消息
     log_message = Signal(str)
 
@@ -98,6 +100,12 @@ class PlotCanvasWidget(QWidget):
         self._build_ui()
         self._layout.rebuild_axes_for_mode()
         self._connect_events()
+
+        # 拖放过滤器：安装在 canvas 上，处理参数拖入子图
+        from ._drop_ctrl import CanvasDropFilter
+        self._drop_filter = CanvasDropFilter(self)
+        self.canvas.installEventFilter(self._drop_filter)
+        self.canvas.setAcceptDrops(True)
 
     # ── UI 构建 ──
 
@@ -145,13 +153,14 @@ class PlotCanvasWidget(QWidget):
         # 先处理拖拽平移
         self._pan.on_motion(event)
 
-        # 光标样式：仅在非拖拽状态下更新
+        # 光标样式：仅在非拖拽状态下且样式实际变化时更新
         if not self._pan.is_panning():
             has_data = self.ctx is not None and self.ctx.time_sec is not None and len(self.ctx.time_sec) > 0
-            if event.inaxes is not None and has_data:
-                self.canvas.setCursor(Qt.CursorShape.OpenHandCursor)
-            else:
-                self.canvas.setCursor(Qt.CursorShape.ArrowCursor)
+            want_cursor = (Qt.CursorShape.OpenHandCursor
+                           if event.inaxes is not None and has_data
+                           else Qt.CursorShape.ArrowCursor)
+            if self.canvas.cursor().shape() != want_cursor:
+                self.canvas.setCursor(want_cursor)
 
     def _on_button_release(self, event) -> None:
         """鼠标释放：PanController 处理平移完成，非平移则交由 LayoutController。"""
@@ -193,6 +202,10 @@ class PlotCanvasWidget(QWidget):
     def add_to_subplot(self, field_name: str):
         """添加信号到当前选中的子图。"""
         self._renderer.add_to_subplot(field_name)
+
+    def add_to_subplot_by_index(self, idx: int, field_name: str):
+        """添加信号到指定索引的子图（供拖放使用）。"""
+        self._renderer._add_to_subplot(idx, field_name)
 
     def remove_from_subplot(self, field_name: str):
         """从当前选中的子图移除信号。"""

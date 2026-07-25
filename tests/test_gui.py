@@ -199,6 +199,13 @@ def _make_widget_mock(n_axes=2, time_sec=None, xlim_list=None):
         trans_data = MagicMock()
         trans_data.inverted.return_value = inv_transform
         ax.transData = trans_data
+
+        # 提供 get_window_extent 支持：返回 axes 像素边界框
+        # PanController._compute_x_scale 使用此方法计算 Y 轴无关的缩放比
+        bbox = MagicMock()
+        bbox.width = px_width
+        ax.get_window_extent.return_value = bbox
+
         axes.append(ax)
     widget.axes = axes
 
@@ -373,23 +380,31 @@ class TestPanControllerOnMotion:
         assert pan._is_panning is False
 
     def test_panning_applies_horizontal_offset(self):
-        """平移应水平偏移所有子图的 xlim。"""
+        """平移应水平偏移所有子图的 xlim（Y 轴无关公式）。
+
+        新公式：dx_data = dx_pixel × x_scale
+        其中 dx_pixel = press_x - curr_x, x_scale = (xlim[1] - xlim[0]) / axes_pixel_width
+        默认 xlim=(0,100), px_width=1000 → x_scale = 0.1
+        向右拖 20px (press=100, curr=120) → dx_pixel = -20 → dx_data = -2.0
+        新 xlim = (0-2, 100-2) = (-2, 98)（无边界约束，自由平移）
+        """
         widget = _make_widget_mock(n_axes=2, time_sec=np.array([0.0, 50.0, 200.0]))
         pan = PanController(widget)
 
         press_event = _make_event(button=1, x=100, y=200, xdata=50.0, inaxes=widget.axes[0])
         pan.on_press(press_event)
 
-        # 向右拖拽 20px，xdata 从 50 增加到 60
+        # 向右拖拽 20px（视图向左移动）
         motion_event = _make_event(x=120, y=200, xdata=60.0, inaxes=widget.axes[0])
         pan.on_motion(motion_event)
 
-        # dx_data = press_xdata - curr_xdata = 50 - 60 = -10
-        # 新 xlim = (0-10, 100-10) = (-10, 90)，但受边界约束
-        # t_min=0, t_max=200, span=100, new_start=-10 < t_min=0
-        # → new_start=0, new_end=100
+        # dx_pixel = 100 - 120 = -20, dx_data = -20 × 0.1 = -2.0
+        # 新 xlim = (-2.0, 98.0)（自由平移，无约束）
         for ax in widget.axes:
             ax.set_xlim.assert_called()
+            call_args = ax.set_xlim.call_args[0]
+            assert call_args[0] == pytest.approx(-2.0)
+            assert call_args[1] == pytest.approx(98.0)
 
     def test_motion_after_press_inaxes_none_uses_pixel_estimate(self):
         """press_event.inaxes 为 None 时 on_motion 应直接返回。"""
@@ -572,7 +587,7 @@ class TestPanControllerApplyPan:
             ax.set_xlim.assert_called_once_with(15.0, 65.0)
 
     def test_boundary_constraint_left(self):
-        """平移不应超出数据左边界（含 5% 白边）。"""
+        """自由平移模式：向左平移不受约束。"""
         widget = _make_widget_mock(
             n_axes=1,
             time_sec=np.array([0.0, 50.0, 100.0]),
@@ -581,29 +596,26 @@ class TestPanControllerApplyPan:
         pan = PanController(widget)
         pan._press_xlim = [(5.0, 55.0)]
 
-        # 向左平移 10 个数据单位，new_start = 5-10 = -5
-        # 白边 margin = 0.05 * 100 = 5, left_bound = 0-5 = -5
-        # -5 恰好等于 left_bound，不触发约束
+        # 自由平移：向左平移 10（无约束）
         pan._apply_pan(-10.0)
         widget.axes[0].set_xlim.assert_called_once_with(-5.0, 45.0)
 
     def test_boundary_constraint_left_hard_stop(self):
-        """平移超出白边边界时硬停。"""
+        """自由平移模式：向左平移不受约束。"""
         widget = _make_widget_mock(
             n_axes=1,
             time_sec=np.array([0.0, 50.0, 100.0]),
             xlim_list=[(5.0, 55.0)],
         )
-        # 使用 0% 白边（硬停模式）
-        pan = PanController(widget, white_margin_ratio=0.0)
+        pan = PanController(widget)
         pan._press_xlim = [(5.0, 55.0)]
 
-        # 向左平移 10，new_start = -5 < t_min=0，应约束到 0
+        # 自由平移：向左平移 10，new_start = -5（无约束）
         pan._apply_pan(-10.0)
-        widget.axes[0].set_xlim.assert_called_once_with(0.0, 50.0)
+        widget.axes[0].set_xlim.assert_called_once_with(-5.0, 45.0)
 
     def test_boundary_constraint_right(self):
-        """平移不应超出数据右边界（含 5% 白边）。"""
+        """自由平移模式：向右平移不受约束。"""
         widget = _make_widget_mock(
             n_axes=1,
             time_sec=np.array([0.0, 50.0, 100.0]),
@@ -612,24 +624,23 @@ class TestPanControllerApplyPan:
         pan = PanController(widget)
         pan._press_xlim = [(45.0, 95.0)]
 
-        # 向右平移 10 个数据单位，new_end = 95+10 = 105
-        # 白边 margin = 0.05 * 100 = 5, right_bound = 100+5 = 105
-        # 105 恰好等于 right_bound，不触发约束
+        # 自由平移：向右平移 10，new_end = 105（无约束）
         pan._apply_pan(10.0)
         widget.axes[0].set_xlim.assert_called_once_with(55.0, 105.0)
 
     def test_boundary_constraint_right_hard_stop(self):
-        """右边界超出白边时硬停。"""
+        """自由平移模式：右边界无硬停。"""
         widget = _make_widget_mock(
             n_axes=1,
             time_sec=np.array([0.0, 50.0, 100.0]),
             xlim_list=[(45.0, 95.0)],
         )
-        pan = PanController(widget, white_margin_ratio=0.0)
+        pan = PanController(widget)
         pan._press_xlim = [(45.0, 95.0)]
 
+        # 自由平移：向右平移 10（无约束）
         pan._apply_pan(10.0)
-        widget.axes[0].set_xlim.assert_called_once_with(50.0, 100.0)
+        widget.axes[0].set_xlim.assert_called_once_with(55.0, 105.0)
 
     def test_no_ctx_no_boundary_constraint(self):
         """无 DataContext 时不应用边界约束，允许自由平移。"""
@@ -711,7 +722,7 @@ class TestPanControllerApplyPan:
         widget.axes[2].set_xlim.assert_not_called()
 
     def test_span_preserved_during_boundary_constraint(self):
-        """边界约束时保持视口宽度（span）不变（含 5% 白边）。"""
+        """自由平移模式：平移保持视口宽度（span）不变。"""
         widget = _make_widget_mock(
             n_axes=1,
             time_sec=np.array([0.0, 50.0, 100.0]),
@@ -720,28 +731,26 @@ class TestPanControllerApplyPan:
         pan = PanController(widget)
         pan._press_xlim = [(40.0, 80.0)]
 
-        # 向右平移 30 → new_start=70, new_end=110
-        # 白边 right_bound = 100+5=105, 110 > 105 → new_end=105, new_start=105-40=65
+        # 自由平移：向右平移 30 → new_start=70, new_end=110（无约束）
         pan._apply_pan(30.0)
-        widget.axes[0].set_xlim.assert_called_once_with(65.0, 105.0)
+        widget.axes[0].set_xlim.assert_called_once_with(70.0, 110.0)
 
     def test_span_preserved_hard_stop(self):
-        """硬停模式下边界约束保持 span 不变。"""
+        """自由平移模式：无硬停，保持 span 不变。"""
         widget = _make_widget_mock(
             n_axes=1,
             time_sec=np.array([0.0, 50.0, 100.0]),
             xlim_list=[(40.0, 80.0)],  # span = 40
         )
-        pan = PanController(widget, white_margin_ratio=0.0)
+        pan = PanController(widget)
         pan._press_xlim = [(40.0, 80.0)]
 
-        # 向右平移 30 → new_start=70, new_end=110 > t_max=100
-        # → new_end=100, new_start=100-40=60
+        # 自由平移：向右平移 30（无约束）
         pan._apply_pan(30.0)
-        widget.axes[0].set_xlim.assert_called_once_with(60.0, 100.0)
+        widget.axes[0].set_xlim.assert_called_once_with(70.0, 110.0)
 
     def test_nan_data_time_sec_no_boundary_constraint(self):
-        """time_sec 包含 NaN 时仍按首尾元素作为边界（含 5% 白边）。"""
+        """自由平移模式：time_sec 包含 NaN 时仍可自由平移。"""
         widget = _make_widget_mock(
             n_axes=1,
             time_sec=np.array([0.0, np.nan, 100.0]),
@@ -750,12 +759,9 @@ class TestPanControllerApplyPan:
         pan = PanController(widget)
         pan._press_xlim = [(10.0, 60.0)]
 
-        # 向左平移超过 t_min=0.0，白边 left_bound = 0-5 = -5
+        # 自由平移：向左平移 20（无约束）
         pan._apply_pan(-20.0)
-
-        # new_start = 10-20 = -10 < left_bound=-5
-        # → new_start = -5, new_end = -5+50 = 45
-        widget.axes[0].set_xlim.assert_called_once_with(-5.0, 45.0)
+        widget.axes[0].set_xlim.assert_called_once_with(-10.0, 40.0)
 
 
 class TestPanControllerEdgeCases:
@@ -1425,38 +1431,40 @@ class TestWhiteMarginConfig:
     """测试白边比例可配置。"""
 
     def test_default_margin(self):
-        """默认白边比例为 5%。"""
+        """默认无边界约束（自由平移模式）。"""
         widget = _make_widget_mock(
             n_axes=1,
             time_sec=np.array([0.0, 100.0]),
             xlim_list=[(0.0, 100.0)],
         )
         pan = PanController(widget)
-        assert pan._white_margin_ratio == 0.05
+        # 自由平移：无 _white_margin_ratio 属性
+        assert not hasattr(pan, '_white_margin_ratio')
 
     def test_custom_margin(self):
-        """自定义白边比例。"""
+        """自由平移模式：自定义白边比例不再适用。"""
         widget = _make_widget_mock(
             n_axes=1,
             time_sec=np.array([0.0, 100.0]),
             xlim_list=[(0.0, 100.0)],
         )
-        pan = PanController(widget, white_margin_ratio=0.1)
-        assert pan._white_margin_ratio == 0.1
+        pan = PanController(widget)
+        # 自由平移：无边界约束
+        assert not hasattr(pan, '_white_margin_ratio')
 
     def test_zero_margin_hard_stop(self):
-        """零白边 = 硬停模式。"""
+        """自由平移模式：零白边不再适用，无硬停。"""
         widget = _make_widget_mock(
             n_axes=1,
             time_sec=np.array([0.0, 100.0]),
             xlim_list=[(5.0, 55.0)],
         )
-        pan = PanController(widget, white_margin_ratio=0.0)
+        pan = PanController(widget)
         pan._press_xlim = [(5.0, 55.0)]
 
-        # 向左平移 10，new_start = -5 < t_min=0
+        # 自由平移：向左平移 10（无约束）
         pan._apply_pan(-10.0)
-        widget.axes[0].set_xlim.assert_called_once_with(0.0, 50.0)
+        widget.axes[0].set_xlim.assert_called_once_with(-5.0, 45.0)
 
 
 # ============================================================================
@@ -1673,16 +1681,14 @@ class TestScrollZoom:
 
 
 class TestBoundaryConstraintConditional:
-    """测试 _apply_pan 的条件性边界约束。
+    """测试 _apply_pan 的自由平移行为。
 
-    参照设计文档第3.3节：span ≥ data_span×0.95 时不约束，span < 时启用约束。
+    自由平移模式：无论 span 大小，均不施加边界约束。
+    水平移动仅受 X 轴参数影响，与 Y 轴缩放状态无关。
     """
 
     def test_boundary_disabled_when_full_view(self):
-        """span ≥ data_span×0.95 时，平移不受边界约束。"""
-        # data: [0, 50, 100], data_span=100, threshold = 95
-        # 当前视图: (0, 100), span=100 ≥ 95 → 不约束
-        # dx_data = -50: new_start = -50, new_end = 50
+        """全视图时自由平移。"""
         widget = _make_widget_mock(
             n_axes=1,
             time_sec=np.array([0.0, 50.0, 100.0]),
@@ -1692,17 +1698,10 @@ class TestBoundaryConstraintConditional:
         pan._press_xlim = [(0.0, 100.0)]
 
         pan._apply_pan(-50.0)
-
-        # 由于全视图（span=100 >= 95），不约束，所以 new_start = -50, new_end = 50
         widget.axes[0].set_xlim.assert_called_once_with(-50.0, 50.0)
 
     def test_boundary_enabled_when_zoomed(self):
-        """span < data_span×0.95 时，平移受边界约束。"""
-        # data: [0, 50, 100], data_span=100, threshold = 95
-        # 当前视图: (40, 60), span=20 < 95 → 启用约束
-        # dx_data = -50: new_start = -10, new_end = 10
-        # margin = 5% * 100 = 5, left_bound = -5
-        # -10 < -5 → 约束: new_start = -5, new_end = -5+20 = 15
+        """缩放后自由平移（不再施加条件性约束）。"""
         widget = _make_widget_mock(
             n_axes=1,
             time_sec=np.array([0.0, 50.0, 100.0]),
@@ -1712,15 +1711,11 @@ class TestBoundaryConstraintConditional:
         pan._press_xlim = [(40.0, 60.0)]
 
         pan._apply_pan(-50.0)
-
-        # 启用约束: new_start = -5, new_end = 15
-        widget.axes[0].set_xlim.assert_called_once_with(-5.0, 15.0)
+        # 自由平移：new_start = -10, new_end = 10（无约束）
+        widget.axes[0].set_xlim.assert_called_once_with(-10.0, 10.0)
 
     def test_boundary_threshold_exact_95_percent(self):
-        """span = data_span×0.95 临界条件（不约束，因为条件是 span < 95）。"""
-        # data: [0, 50, 100], data_span=100, threshold = 95
-        # 当前视图: (0, 95), span=95 = 95 → 不约束（条件 span < 95 为 False）
-        # dx_data = -10: new_start = -10, new_end = 85
+        """临界条件：自由平移，无约束。"""
         widget = _make_widget_mock(
             n_axes=1,
             time_sec=np.array([0.0, 50.0, 100.0]),
@@ -1730,8 +1725,6 @@ class TestBoundaryConstraintConditional:
         pan._press_xlim = [(0.0, 95.0)]
 
         pan._apply_pan(-10.0)
-
-        # span=95, 95 < 95 为 False → 不约束，new_start = -10, new_end = 85
         widget.axes[0].set_xlim.assert_called_once_with(-10.0, 85.0)
 
 
@@ -1771,7 +1764,7 @@ class TestScrollPanInteraction:
         widget.axes[0].set_xlim.assert_not_called()
 
     def test_pan_works_after_zoom(self):
-        """缩放后平移正常工作（边界约束条件性启用）。"""
+        """缩放后平移正常工作（自由平移，无约束）。"""
         from ftpa.gui._crossing_analyzer import CrossingAnalyzer
 
         widget = _make_widget_mock(
@@ -1795,12 +1788,9 @@ class TestScrollPanInteraction:
         # 2. 模拟缩放后的状态：更新 widget 的 get_xlim 返回值
         widget.axes[0].get_xlim.return_value = (4.0, 96.0)
 
-        # 3. 平移：直接调用 _apply_pan
-        # span = 92 < 95 → 启用边界约束
+        # 3. 平移：自由平移（无约束）
         # dx_data = -20: new_start = -16, new_end = 76
-        # margin = 5, left_bound = -5
-        # -16 < -5 → 约束: new_start = -5, new_end = -5+92 = 87
         pan._press_xlim = [(4.0, 96.0)]
         pan._apply_pan(-20.0)
 
-        widget.axes[0].set_xlim.assert_called_with(-5.0, 87.0)
+        widget.axes[0].set_xlim.assert_called_with(-16.0, 76.0)

@@ -88,6 +88,8 @@ class LayoutController:
         # 2. 原子化重建：一次 clear + 一次性创建所有轴并绘制
         w.figure.clear()
         w.axes = []
+        # 布局变更导致 axes 重建，Line2D 缓存失效
+        w._renderer.invalidate_cache()
 
         crossing_fields: set[str] = set()
 
@@ -136,6 +138,7 @@ class LayoutController:
         w = self.w
         w.figure.clear()
         w.axes = []
+        w._renderer.invalidate_cache()
         for i in range(4):
             ax = w.figure.add_subplot(4, 1, i + 1)
             ax.grid(True, alpha=0.3)
@@ -155,9 +158,41 @@ class LayoutController:
                 if w._selected_subplot_idx == i:
                     spine.set_color("#1976D2")
                     spine.set_linewidth(2.5)
+                    spine.set_linestyle("solid")
                 else:
                     spine.set_color("#cccccc")
                     spine.set_linewidth(0.8)
+                    spine.set_linestyle("solid")
+
+    def apply_drag_highlight(self, hover_idx: int | None) -> None:
+        """应用拖拽悬停高亮（绿色虚线边框）。
+
+        拖拽悬停子图显示绿色虚线，选中子图保持蓝色实线，其余浅灰。
+        """
+        w = self.w
+        for i, ax in enumerate(w.axes):
+            for spine in ax.spines.values():
+                if i == hover_idx:
+                    # 拖拽悬停：绿色虚线
+                    spine.set_color("#4CAF50")
+                    spine.set_linestyle("dashed")
+                    spine.set_linewidth(2.5)
+                elif w._selected_subplot_idx == i:
+                    # 选中子图：保持蓝色实线
+                    spine.set_color("#1976D2")
+                    spine.set_linestyle("solid")
+                    spine.set_linewidth(2.5)
+                else:
+                    # 普通子图：浅灰实线
+                    spine.set_color("#cccccc")
+                    spine.set_linestyle("solid")
+                    spine.set_linewidth(0.8)
+        w.canvas.draw_idle()
+
+    def clear_drag_highlight(self) -> None:
+        """清除拖拽悬停高亮，恢复原始边框样式。"""
+        self.apply_spine_color()
+        self.w.canvas.draw_idle()
 
     # ── 子图选择 ──
 

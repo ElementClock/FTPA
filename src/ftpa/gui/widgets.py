@@ -200,6 +200,11 @@ class ParameterTreeWidget(QWidget):
         self._selected_param: str | None = None
         self._build_ui()
 
+        # 拖拽辅助：安装在 tree.viewport() 上，处理拖拽发起
+        from ._drop_ctrl import TreeDragHelper
+        self._drag_helper = TreeDragHelper(self)
+        self.tree.viewport().installEventFilter(self._drag_helper)
+
     def _build_ui(self):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(4, 4, 4, 4)

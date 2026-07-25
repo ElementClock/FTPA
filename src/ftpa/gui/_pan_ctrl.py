@@ -5,7 +5,11 @@
 - 左键拖拽水平平移（所有子图 X 轴同步）
 - 点击/拖拽区分（5 像素阈值）
 - 平移后触发 Y 轴自适应 + 统计更新（防抖）
-- 条件性边界约束（仅当视图已放大时启用，全视图时允许溢出）
+
+设计原则：
+  - 水平平移计算完全独立于 Y 轴状态
+  - 使用纯像素差 × X 轴缩放比计算 dx_data，不依赖 transData
+  - 无边界约束：允许自由平移到数据范围之外（用户可通过缩放回到数据区）
 
 防抖策略：
   拖拽过程中仅修改 X 轴，Y 轴自适应推迟到 on_release 后
@@ -35,13 +39,18 @@ class PanController:
       - PanController 先于 LayoutController 处理 button_press/button_release
       - 通过 was_panning 标记告知 LayoutController 是否跳过子图选择
       - 拖拽阈值 5 像素：未超过阈值 → 点击（选择子图），超过 → 拖拽（平移）
+
+    坐标变换策略（Y 轴无关）：
+      - dx_data = dx_pixel × x_scale
+      - x_scale = (xlim[1] - xlim[0]) / axes_pixel_width
+      - 仅依赖 X 轴参数（xlim）和 axes 像素宽度，与 Y 轴状态完全无关
+      - 比 transData.inverted() 更快（无需 2D 仿射矩阵求逆）
     """
 
     DRAG_THRESHOLD: int = 5  # 像素，区分点击与拖拽
 
-    def __init__(self, widget: PlotCanvasWidget, white_margin_ratio: float = 0.05) -> None:
+    def __init__(self, widget: PlotCanvasWidget) -> None:
         self.w = widget
-        self._white_margin_ratio = white_margin_ratio
 
         # 按下时的 matplotlib 事件对象
         self._press_event = None
@@ -51,13 +60,17 @@ class PanController:
         self._press_xlim: list[tuple[float, float]] | None = None
         # 上一次 release 时是否为平移（供外部查询后清除）
         self._was_panning: bool = False
+        # 按下时缓存的 X 轴缩放比（data_units / pixel），Y 轴无关
+        self._x_scale: float | None = None
 
     # ── 事件处理 ──
 
     def on_press(self, event) -> None:
-        """鼠标按下：记录起始位置和当前 xlim。
+        """鼠标按下：记录起始位置、当前 xlim 和 X 轴缩放比。
 
         仅当左键在 axes 区域内且有数据时记录，否则忽略。
+        缓存 x_scale 确保整个拖拽过程中使用一致的坐标变换，
+        不受后续 Y 轴自适应（_adjust_y_limits）影响。
         """
         if event.button != 1 or event.inaxes is None:
             self._press_event = None
@@ -66,6 +79,10 @@ class PanController:
         if self.w.ctx is None or self.w.ctx.time_sec is None or len(self.w.ctx.time_sec) == 0:
             self._press_event = None
             return
+
+        # 缓存 X 轴缩放比（Y 轴无关）
+        self._x_scale = self._compute_x_scale(event.inaxes)
+
         self._press_event = event
         self._is_panning = False
         self._was_panning = False
@@ -74,12 +91,11 @@ class PanController:
     def on_motion(self, event) -> None:
         """鼠标移动：若超出阈值则开始水平平移。
 
-        算法：
+        算法（Y 轴无关）：
           1. 像素距离 < DRAG_THRESHOLD → 仍在"可能点击"状态，不做任何操作
           2. 像素距离 ≥ DRAG_THRESHOLD → 进入平移模式
-          3. 用像素差 × 按下时的坐标变换计算数据坐标偏移量
-             （避免依赖 event.xdata，消除 axes 位置变化导致的 xdata 抖动）
-          4. 所有子图 X 轴同步偏移，并应用边界约束
+          3. dx_data = dx_pixel × x_scale（仅依赖 X 轴参数，与 Y 轴状态无关）
+          4. 所有子图 X 轴同步偏移
           5. 仅触发 draw_idle，不修改 Y 轴（Y 轴自适应推迟到 release 防抖）
         """
         if self._press_event is None:
@@ -99,21 +115,14 @@ class PanController:
             # 拖拽开始：光标变为 ClosedHandCursor（握拳）
             self.w.canvas.setCursor(Qt.CursorShape.ClosedHandCursor)
 
-        # 计算数据坐标偏移量：使用像素差 + 按下时的 transData 变换
-        # 不依赖 event.xdata，因为 xdata 受 axes 位置影响（Y轴变化→axes微移→xdata偏移）
-        press_ax = self._press_event.inaxes
-        if press_ax is None:
+        # 计算数据坐标偏移量：纯像素差 × X 轴缩放比（Y 轴无关）
+        if event.x is None or self._press_event.x is None:
+            return
+        if self._x_scale is None:
             return
 
-        try:
-            # 使用按下时缓存的坐标变换（不受后续 Y 轴变化影响）
-            inv = press_ax.transData.inverted()
-            press_data_x = inv.transform((self._press_event.x, self._press_event.y))[0]
-            curr_data_x = inv.transform((event.x, event.y))[0]
-            dx_data = press_data_x - curr_data_x
-        except Exception:
-            logger.debug("坐标变换失败，跳过本次平移")
-            return
+        dx_pixel = self._press_event.x - event.x  # 正值=向右拖=视图左移
+        dx_data = dx_pixel * self._x_scale
 
         # 同步平移所有子图（仅修改 X 轴）
         self._apply_pan(dx_data)
@@ -142,6 +151,7 @@ class PanController:
         self._press_event = None
         self._is_panning = False
         self._press_xlim = None
+        self._x_scale = None
 
     # ── 状态查询 ──
 
@@ -169,33 +179,51 @@ class PanController:
         self._is_panning = False
         self._was_panning = False
         self._press_xlim = None
+        self._x_scale = None
 
     # ── 内部方法 ──
 
+    @staticmethod
+    def _compute_x_scale(ax) -> float | None:
+        """计算 X 轴缩放比（数据单位/像素），Y 轴无关。
+
+        公式：x_scale = (xlim[1] - xlim[0]) / axes_pixel_width
+
+        此公式仅依赖：
+          - xlim: X 轴数据范围（X 轴参数）
+          - axes_pixel_width: axes 在画布中的像素宽度（布局参数）
+        不依赖 Y 轴任何参数（ylim、Y 轴 tick 标签宽度等），
+        彻底隔离 Y 轴缩放操作对水平平移计算的影响。
+
+        Args:
+            ax: matplotlib Axes 对象
+
+        Returns:
+            X 轴缩放比（data_units/pixel），或 None（计算失败）
+        """
+        try:
+            xlim = ax.get_xlim()
+            span = xlim[1] - xlim[0]
+            if span <= 0:
+                return None
+            # 获取 axes 在显示坐标系中的像素宽度
+            bbox = ax.get_window_extent()
+            width = bbox.width
+            if width <= 0:
+                return None
+            return span / width
+        except Exception:
+            return None
+
     def _apply_pan(self, dx_data: float) -> None:
-        """将所有子图 X 轴平移 dx_data 数据单位，并应用条件性边界约束。
+        """将所有子图 X 轴平移 dx_data 数据单位。
 
-        边界约束策略（条件性启用）：
-          - 当 span ≥ data_span × 0.95（全视图）→ 禁用约束，允许自由溢出
-          - 当 span < data_span × 0.95（已放大）→ 启用约束，含可配置白边
-
-        约束算法（仅当启用时执行）：
-          1. 计算新范围 [new_start, new_end] = [old_start + dx, old_end + dx]
-          2. 计算白边边界：left_bound = t_min - margin, right_bound = t_max + margin
-             其中 margin = white_margin_ratio × (t_max - t_min)
-          3. 如果 new_start < left_bound → 整体右移至 left_bound
-          4. 如果 new_end > right_bound → 整体左移至 right_bound
-          5. 确保 span = new_end - new_start 不变（不改变缩放级别）
+        无边界约束：允许自由平移到数据范围之外。
+        用户可通过滚轮缩放或重置缩放回到数据区域。
+        这确保水平移动完全不受 Y 轴缩放状态影响。
         """
         if self._press_xlim is None:
             return
-
-        # 获取数据时间边界
-        t_min: float | None = None
-        t_max: float | None = None
-        if self.w.ctx is not None and self.w.ctx.time_sec is not None and len(self.w.ctx.time_sec) > 0:
-            t_min = float(self.w.ctx.time_sec[0])
-            t_max = float(self.w.ctx.time_sec[-1])
 
         for i, ax in enumerate(self.w.axes):
             if i >= len(self._press_xlim):
@@ -203,20 +231,4 @@ class PanController:
             old_start, old_end = self._press_xlim[i]
             new_start = old_start + dx_data
             new_end = old_end + dx_data
-            span = new_end - new_start
-
-            # 条件性边界约束：仅当已放大时启用（span < data_span × 0.95）
-            if t_min is not None and t_max is not None:
-                data_span = t_max - t_min
-                if data_span > 0 and span < data_span * 0.95:
-                    margin = self._white_margin_ratio * data_span
-                    left_bound = t_min - margin
-                    right_bound = t_max + margin
-                    if new_start < left_bound:
-                        new_start = left_bound
-                        new_end = left_bound + span
-                    if new_end > right_bound:
-                        new_end = right_bound
-                        new_start = right_bound - span
-
             ax.set_xlim(new_start, new_end)

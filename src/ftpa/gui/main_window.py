@@ -85,6 +85,7 @@ class MainWindow(QMainWindow):
         self.plot_widget = PlotCanvasWidget()
         self.plot_widget.log_message.connect(self._append_log)
         self.plot_widget.subplot_selected.connect(self._on_subplot_selected)
+        self.plot_widget.param_dropped.connect(self._on_param_dropped)
 
         self.param_tree = ParameterTreeWidget()
         self.param_tree.add_clicked.connect(self._on_add_param)
@@ -291,6 +292,11 @@ class MainWindow(QMainWindow):
     def _on_clear_param(self):
         """参数树「清空」按钮回调。"""
         self.plot_widget.clear_selected_subplot()
+        self._update_param_tree_indicators()
+        self._update_master_combo()
+
+    def _on_param_dropped(self, field_name: str):
+        """拖放参数到子图后的回调 — 更新指示器和下拉框。"""
         self._update_param_tree_indicators()
         self._update_master_combo()
 

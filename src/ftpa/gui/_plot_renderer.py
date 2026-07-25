@@ -6,6 +6,12 @@
 - 信号添加/移除/清空
 - 右键上下文菜单
 - 数据上下文设置
+
+性能优化策略：
+- Line2D 复用：信号增删时增量更新（set_xdata/set_ydata），
+  仅布局变更时才执行 ax.clear() 全量重建。
+- tight_layout 条件化：仅在布局变更时调用（~22ms），
+  数据变更时跳过。
 """
 
 from __future__ import annotations
@@ -30,6 +36,15 @@ class PlotRenderer:
 
     def __init__(self, widget: PlotCanvasWidget) -> None:
         self.w = widget
+        # Line2D 缓存: (subplot_idx, field_name) -> Line2D
+        self._line_cache: dict[tuple[int, str], Any] = {}
+        # 空子图文本标注缓存: subplot_idx -> Text
+        self._empty_text_cache: dict[int, Any] = {}
+
+    def invalidate_cache(self) -> None:
+        """清除 Line2D 缓存（布局切换/axes 重建时调用）。"""
+        self._line_cache.clear()
+        self._empty_text_cache.clear()
 
     # ── 数据绘制 ──
 
@@ -67,7 +82,10 @@ class PlotRenderer:
         return w.ctx.time_sec, data_arr
 
     def plot_subplot(self, ax, idx: int, crossing_fields: set[str]) -> None:
-        """在子图 ax 上绘制第 idx 组信号，并将出现的信号名加入 crossing_fields。"""
+        """在子图 ax 上绘制第 idx 组信号，并将出现的信号名加入 crossing_fields。
+
+        仅用于 switch_layout 中的全量绘制（布局切换时 axes 被重建）。
+        """
         w = self.w
         fields = w.subplot_fields.get(idx, [])
         if fields:
@@ -75,20 +93,124 @@ class PlotRenderer:
                 render_data = self._get_render_data(f)
                 if render_data is not None:
                     t, d = render_data
-                    ax.plot(t, d, linewidth=0.8, label=w.ctx.get_label(f))
+                    line = ax.plot(t, d, linewidth=0.8, label=w.ctx.get_label(f))[0]
+                    self._line_cache[(idx, f)] = line
                     crossing_fields.add(f)
             if len(fields) > 1:
                 ax.legend(fontsize=8)
             ax.set_ylabel(w.ctx.get_label(fields[0]) if len(fields) == 1 else f"子图{idx + 1}")
         else:
-            ax.text(0.5, 0.5, f"子图 {idx + 1}（空）\n点击选中后添加参数",
-                    ha="center", va="center", transform=ax.transAxes, fontsize=9, alpha=0.4)
+            txt = ax.text(0.5, 0.5, f"子图 {idx + 1}（空）\n点击选中后添加参数",
+                         ha="center", va="center", transform=ax.transAxes, fontsize=9, alpha=0.4)
+            self._empty_text_cache[idx] = txt
 
-    def rebuild_plot(self) -> None:
-        """重新绘制所有子图的信号内容（不重建 axes，仅清除+重绘数据）。"""
+    def rebuild_plot(self, layout_changed: bool = False) -> None:
+        """重新绘制所有子图的信号内容。
+
+        Args:
+            layout_changed: 是否因布局切换调用。
+                True → ax.clear() 全量重建 + tight_layout（安全但较慢）
+                False → Line2D 增量更新，跳过 tight_layout（快速路径）
+
+        增量更新策略（layout_changed=False）：
+          - 对比 _line_cache 与当前 subplot_fields
+          - 移除已删除信号的 Line2D
+          - 复用已有 Line2D（set_xdata/set_ydata）
+          - 新建新增信号的 Line2D
+          - 避免不必要的 ax.clear() + 对象重建
+        """
         w = self.w
         if w.ctx is None:
             return
+
+        if layout_changed:
+            self._full_rebuild()
+            return
+
+        # ── 增量更新路径 ──
+        crossing_fields: set[str] = set()
+
+        for i, ax in enumerate(w.axes):
+            fields = w.subplot_fields.get(i, [])
+            field_set = set(fields)
+
+            # 1. 获取该子图已缓存的 field 集合
+            cached_fields = {k[1] for k in self._line_cache if k[0] == i}
+
+            # 2. 移除不再需要的 Line2D
+            removed_fields = cached_fields - field_set
+            for f in removed_fields:
+                line = self._line_cache.pop((i, f), None)
+                if line is not None:
+                    try:
+                        line.remove()
+                    except ValueError:
+                        pass
+
+            # 3. 更新/新增 Line2D
+            for f in fields:
+                render_data = self._get_render_data(f)
+                if render_data is None:
+                    continue
+                t, d = render_data
+                crossing_fields.add(f)
+
+                key = (i, f)
+                if key in self._line_cache:
+                    # 复用已有 Line2D：仅更新数据
+                    line = self._line_cache[key]
+                    line.set_xdata(t)
+                    line.set_ydata(d)
+                else:
+                    # 新建 Line2D
+                    line = ax.plot(t, d, linewidth=0.8, label=w.ctx.get_label(f))[0]
+                    self._line_cache[key] = line
+
+            # 4. 处理空子图文本标注
+            if not fields:
+                if i not in self._empty_text_cache:
+                    txt = ax.text(0.5, 0.5, f"子图 {i + 1}（空）\n点击选中后添加参数",
+                                  ha="center", va="center", transform=ax.transAxes,
+                                  fontsize=9, alpha=0.4)
+                    self._empty_text_cache[i] = txt
+            else:
+                txt = self._empty_text_cache.pop(i, None)
+                if txt is not None:
+                    try:
+                        txt.remove()
+                    except ValueError:
+                        pass
+
+            # 5. 处理 legend：仅在信号集合变化时重建
+            need_legend = len(fields) > 1
+            old_legend = ax.get_legend()
+            if old_legend is not None and not need_legend:
+                old_legend.remove()
+            elif need_legend:
+                if old_legend is not None:
+                    old_legend.remove()
+                # 重建 legend 以反映当前 label
+                ax.legend(fontsize=8)
+
+            # 6. 处理 ylabel
+            if fields:
+                ylabel = w.ctx.get_label(fields[0]) if len(fields) == 1 else f"子图{i + 1}"
+            else:
+                ylabel = ""
+            ax.set_ylabel(ylabel)
+
+        # 7. 通用装饰
+        self._apply_axis_decorations()
+        w._layout.apply_spine_color()
+        w.canvas.draw_idle()
+
+    def _full_rebuild(self) -> None:
+        """全量重建：ax.clear() + 重绘所有 Line2D + tight_layout。
+
+        仅在布局变更（switch_layout）时调用，确保 axes 完全干净。
+        """
+        w = self.w
+        self.invalidate_cache()
 
         crossing_fields: set[str] = set()
 
@@ -102,15 +224,27 @@ class PlotRenderer:
                     render_data = self._get_render_data(f)
                     if render_data is not None:
                         t, d = render_data
-                        ax.plot(t, d, linewidth=0.8, label=w.ctx.get_label(f))
+                        line = ax.plot(t, d, linewidth=0.8, label=w.ctx.get_label(f))[0]
+                        self._line_cache[(i, f)] = line
                         crossing_fields.add(f)
                 if len(fields) > 1:
                     ax.legend(fontsize=8)
                 ax.set_ylabel(w.ctx.get_label(fields[0]) if len(fields) == 1 else f"子图{i + 1}")
             else:
-                ax.text(0.5, 0.5, f"子图 {i + 1}（空）\n点击选中后添加参数",
-                        ha="center", va="center", transform=ax.transAxes, fontsize=9, alpha=0.4)
+                txt = ax.text(0.5, 0.5, f"子图 {i + 1}（空）\n点击选中后添加参数",
+                              ha="center", va="center", transform=ax.transAxes,
+                              fontsize=9, alpha=0.4)
+                self._empty_text_cache[i] = txt
 
+        self._apply_axis_decorations()
+        w._layout.apply_spine_color()
+
+        w.figure.tight_layout()
+        w.canvas.draw_idle()
+
+    def _apply_axis_decorations(self) -> None:
+        """应用 X 轴标签和时间格式化器（不触发重绘）。"""
+        w = self.w
         if w._layout_mode == "4x1":
             w.axes[-1].set_xlabel("时间 (s)")
         elif w._layout_mode == "1x1":
@@ -129,11 +263,6 @@ class PlotRenderer:
         for ax in bottom_axes:
             ax.xaxis.set_major_formatter(FuncFormatter(
                 lambda s, _: format_time_seconds(float(s))))
-
-        w._layout.apply_spine_color()
-
-        w.figure.tight_layout()
-        w.canvas.draw_idle()
 
     # ── 信号管理 ──
 
