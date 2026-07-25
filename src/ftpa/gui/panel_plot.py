@@ -141,12 +141,15 @@ class PlotCanvasWidget(QWidget):
             self._pan.reset()
         self._pan.on_press(event)
         # 右键菜单在 press 时即触发（不等待 release）
-        if event.button == 3 and event.inaxes is not None:
-            for i, ax in enumerate(self.axes):
-                if ax == event.inaxes and self.subplot_fields.get(i, []):
-                    self._right_clicked_axes_idx = i
-                    self._renderer.show_context_menu(event)
-                    return
+        if event.button == 3:
+            # 记录右键点击的子图索引（None 表示空白区域）
+            self._right_clicked_axes_idx = None
+            if event.inaxes is not None:
+                for i, ax in enumerate(self.axes):
+                    if ax == event.inaxes:
+                        self._right_clicked_axes_idx = i
+                        break
+            self._renderer.show_context_menu(event)
 
     def _on_motion(self, event) -> None:
         """鼠标移动：PanController 处理拖拽平移 + 光标样式更新。"""

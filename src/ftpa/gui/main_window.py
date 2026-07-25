@@ -243,18 +243,7 @@ class MainWindow(QMainWindow):
         menu_file.addAction(act_quit)
 
         # 视图
-        self._menu_layout_actions = {}
         menu_view = menubar.addMenu("视图")
-        for mode, text in [("1x1", "1×1"), ("2x1", "2×1"), ("3x1", "3×1"),
-                           ("4x1", "4×1"), ("2x2", "2×2")]:
-            act = QAction(text, self)
-            act.setCheckable(True)
-            act.setChecked(mode == "1x1")
-            act.triggered.connect(lambda _, m=mode: self._switch_layout(m))
-            self._menu_layout_actions[mode] = act
-            menu_view.addAction(act)
-
-        menu_view.addSeparator()
 
         act_panel = QAction("参数面板", self)
         act_panel.setCheckable(True)
@@ -282,15 +271,6 @@ class MainWindow(QMainWindow):
             "AG600 试飞数据处理工具\n"
             "版本 " + __version__
         )
-
-    # ── 布局切换 ──
-
-    def _switch_layout(self, mode: str):
-        """切换子图布局模式。"""
-        self.plot_widget.set_layout_mode(mode)
-        # 同步菜单项状态
-        for m, act in self._menu_layout_actions.items():
-            act.setChecked(m == mode)
 
     # ── 分隔条面板折叠 ──
 

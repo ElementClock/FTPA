@@ -312,49 +312,67 @@ class PlotRenderer:
     # ── 右键菜单 ──
 
     def show_context_menu(self, event) -> None:
-        """显示子图右键菜单：添加/删除信号、清空子图。"""
+        """显示子图右键菜单：布局切换 + 添加/删除信号、清空子图。
+
+        布局子菜单始终显示；信号管理选项仅在右键点击有信号的子图时显示。
+        """
         w = self.w
         ctx = w.ctx
-        if ctx is None or w._right_clicked_axes_idx is None:
-            return
-
-        idx = w._right_clicked_axes_idx
-        current_fields = w.subplot_fields.get(idx, [])
-
         menu = QMenu(w)
 
-        # 添加信号子菜单
-        add_menu = menu.addMenu("添加信号")
-        all_fields = ctx.get_field_names()
-        for f in all_fields:
-            label = ctx.get_label(f)
-            if f not in current_fields:
-                act = QAction(f"  {label}", w)
-                act.setData(f)
-                act.triggered.connect(lambda _, ff=f: self._add_to_subplot(idx, ff))
-                add_menu.addAction(act)
-            else:
-                act = QAction(f"✓ {label}", w)
-                act.setEnabled(False)
-                add_menu.addAction(act)
+        # ── 布局子菜单（始终显示）──
+        layout_menu = menu.addMenu("布局")
+        for mode, text in [("1x1", "1×1"), ("2x1", "2×1"), ("3x1", "3×1"),
+                           ("4x1", "4×1"), ("2x2", "2×2")]:
+            act = QAction(text, w)
+            act.setCheckable(True)
+            act.setChecked(mode == w._layout_mode)
+            act.triggered.connect(lambda _, m=mode: self._switch_layout_from_menu(m))
+            layout_menu.addAction(act)
 
-        # 删除信号子菜单
-        if current_fields:
-            del_menu = menu.addMenu("删除信号")
-            for f in current_fields:
+        # ── 信号管理（仅在有数据的子图上显示）──
+        idx = w._right_clicked_axes_idx
+        current_fields = w.subplot_fields.get(idx, []) if idx is not None else []
+
+        if ctx is not None and idx is not None and current_fields:
+            menu.addSeparator()
+
+            # 添加信号子菜单
+            add_menu = menu.addMenu("添加信号")
+            all_fields = ctx.get_field_names()
+            for f in all_fields:
                 label = ctx.get_label(f)
-                act = QAction(f"{label}", w)
-                act.setData(f)
-                act.triggered.connect(lambda _, ff=f: self._remove_from_subplot(idx, ff))
-                del_menu.addAction(act)
+                if f not in current_fields:
+                    act = QAction(f"  {label}", w)
+                    act.setData(f)
+                    act.triggered.connect(lambda _, ff=f: self._add_to_subplot(idx, ff))
+                    add_menu.addAction(act)
+                else:
+                    act = QAction(f"✓ {label}", w)
+                    act.setEnabled(False)
+                    add_menu.addAction(act)
 
-        menu.addSeparator()
-        act_clear = QAction("清空该子图", w)
-        act_clear.triggered.connect(lambda: self._clear_subplot(idx))
-        menu.addAction(act_clear)
+            # 删除信号子菜单
+            if current_fields:
+                del_menu = menu.addMenu("删除信号")
+                for f in current_fields:
+                    label = ctx.get_label(f)
+                    act = QAction(f"{label}", w)
+                    act.setData(f)
+                    act.triggered.connect(lambda _, ff=f: self._remove_from_subplot(idx, ff))
+                    del_menu.addAction(act)
+
+            menu.addSeparator()
+            act_clear = QAction("清空该子图", w)
+            act_clear.triggered.connect(lambda: self._clear_subplot(idx))
+            menu.addAction(act_clear)
 
         widget_pos = w.canvas.mapFromGlobal(w.cursor().pos())
         menu.exec(w.canvas.mapToGlobal(widget_pos))
+
+    def _switch_layout_from_menu(self, mode: str) -> None:
+        """右键菜单：切换布局模式。"""
+        self.w.set_layout_mode(mode)
 
     def _add_to_subplot(self, idx: int, field: str) -> None:
         """右键菜单：添加信号 field 到指定子图 idx。"""
