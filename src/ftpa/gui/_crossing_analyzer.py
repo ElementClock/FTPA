@@ -27,6 +27,14 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# 滚轮缩放参数
+# span 最小值（秒），防止过度放大导致视觉异常
+MIN_ZOOM_SPAN: float = 1.0
+# 上滚缩放因子：span × 0.92 → 放大（8%步长，精细可控）
+ZOOM_FACTOR_IN: float = 0.92
+# 下滚缩放因子：span × 1.087 → 缩小（1/0.92≈1.087，保证来回滚动可恢复）
+ZOOM_FACTOR_OUT: float = 1.087
+
 
 class CrossingAnalyzer:
     """穿越分析 + 统计更新。"""
@@ -47,6 +55,8 @@ class CrossingAnalyzer:
 
         # 缩放防抖定时器
         self._zoom_timer: QTimer | None = None
+        # 防抖快照：触发时的 axes 数量，用于检测回调时 axes 是否已变化
+        self._zoom_snapshot_axes_count: int = -1
 
         # 统计文本缓存
         self.last_stats_text: str = ""
@@ -282,10 +292,16 @@ class CrossingAnalyzer:
 
         参照 MATLAB plotCoreInteractive.m adjustYLimits：
         对每个子图，取可见时间范围内的数据，计算 min/max 并添加 5% 边距。
+
+        性能优化：使用 np.searchsorted 替代布尔索引，
+        对已排序的 time_sec 数组复杂度从 O(N) 降到 O(log N)，
+        且无需创建临时 bool 数组。
         """
         w = self.w
         if w.ctx is None or not w.axes or w.ctx.time_sec is None:
             return
+
+        time_sec = w.ctx.time_sec
 
         for i, ax in enumerate(w.axes):
             try:
@@ -302,17 +318,21 @@ class CrossingAnalyzer:
             y_max_all = -np.inf
             has_data = False
 
+            # 使用 searchsorted 快速定位可见窗口索引
+            i_start = np.searchsorted(time_sec, t_start, side="left")
+            i_end = np.searchsorted(time_sec, t_end, side="right")
+
             for f in fields:
                 arr = w.ctx.data.get(f)
                 if arr is None:
                     continue
-                idx = (w.ctx.time_sec >= t_start) & (w.ctx.time_sec <= t_end)
-                seg = arr[idx]
+                seg = arr[i_start:i_end]
                 # 排除 NaN
-                seg = seg[~np.isnan(seg)]
-                if len(seg) > 0:
-                    y_min_all = min(y_min_all, float(np.min(seg)))
-                    y_max_all = max(y_max_all, float(np.max(seg)))
+                valid_mask = ~np.isnan(seg)
+                valid_seg = seg[valid_mask]
+                if len(valid_seg) > 0:
+                    y_min_all = min(y_min_all, float(np.min(valid_seg)))
+                    y_max_all = max(y_max_all, float(np.max(valid_seg)))
                     has_data = True
 
             if has_data:
@@ -327,14 +347,124 @@ class CrossingAnalyzer:
 
     # ── 缩放防抖 ──
 
+    def on_scroll_zoom(self, event) -> None:
+        """鼠标滚轮缩放时间轴。
+
+        以鼠标位置为缩放中心，所有子图X轴同步缩放。
+        缩放后通过 on_canvas_zoom 触发防抖的Y轴自适应+统计更新。
+
+        Args:
+            event: matplotlib scroll_event 事件对象。
+                   必须包含 button ("up"/"down")、xdata、inaxes 属性。
+
+        行为:
+          - event.inaxes 为 None → 直接返回（鼠标在子图外）
+          - ctx 为 None 或 time_sec 为空 → 直接返回
+          - axes 为空 → 直接返回
+          - 上滚 (button="up") → 放大 (span × 0.92, 8%步长)
+          - 下滚 (button="down") → 缩小 (span × 1.087, 8.7%步长)
+          - span 最小值 = MIN_ZOOM_SPAN (1.0秒)
+          - span 最大值 = data_span × 2
+          - 缩放后调用 on_canvas_zoom(event) 触发防抖
+        """
+        try:
+            w = self.w
+            # 前置检查：鼠标必须在子图内
+            if getattr(event, "inaxes", None) is None:
+                return
+            # 前置检查：必须有数据上下文
+            ctx = w.ctx
+            if ctx is None or ctx.time_sec is None or len(ctx.time_sec) < 2:
+                return
+            # 前置检查：必须有子图
+            if not w.axes:
+                return
+
+            # 缩放方向：上滚放大，下滚缩小
+            button = getattr(event, "button", None)
+            if button == "up":
+                factor = ZOOM_FACTOR_IN
+            elif button == "down":
+                factor = ZOOM_FACTOR_OUT
+            else:
+                return
+
+            # 取第一个子图xlim作为基准（所有子图xlim通常相同）
+            try:
+                cur_xlim = w.axes[0].get_xlim()
+                cur_start = float(cur_xlim[0])
+                cur_end = float(cur_xlim[1])
+            except Exception:
+                return
+
+            span = cur_end - cur_start
+            # 数据时间范围
+            t_min = float(ctx.time_sec[0])
+            t_max = float(ctx.time_sec[-1])
+            data_span = t_max - t_min
+
+            # span 异常时回退到 data_span
+            if span <= 0:
+                span = data_span if data_span > 0 else 1.0
+
+            # 缩放中心：优先使用鼠标位置，否则回退到当前视图中心
+            center = getattr(event, "xdata", None)
+            if center is None:
+                center = (cur_start + cur_end) / 2.0
+            center = float(center)
+
+            # 计算鼠标在视图中的相对位置 [0, 1]
+            ratio = (center - cur_start) / span if span > 0 else 0.5
+
+            # 新的 span
+            new_span = span * factor
+            # 限制 span 范围：[MIN_ZOOM_SPAN, data_span × 2]
+            max_span = data_span * 2.0 if data_span > 0 else new_span
+            if new_span < MIN_ZOOM_SPAN:
+                new_span = MIN_ZOOM_SPAN
+            elif new_span > max_span:
+                new_span = max_span
+
+            # 保持鼠标位置不变，重新计算 new_start / new_end
+            new_start = center - ratio * new_span
+            new_end = new_start + new_span
+
+            # 同步所有子图
+            for ax in w.axes:
+                ax.set_xlim(new_start, new_end)
+
+            # 触发防抖的Y轴自适应 + 统计更新
+            self.on_canvas_zoom(event)
+        except Exception:
+            logger.exception("on_scroll_zoom 执行失败")
+
     def on_canvas_zoom(self, event=None) -> None:
-        """画布缩放/滚动后更新统计（防抖 200ms）。"""
+        """画布缩放/滚动/平移后更新统计 + Y轴自适应（防抖 200ms）。
+
+        防抖回调 _zoom_timeout_cb 中执行：
+          1. _adjust_y_limits() — Y轴自适应（5%边距）
+          2. canvas.draw_idle() — 重绘
+          3. update_stats() — 统计更新
+        """
         w = self.w
         if self._zoom_timer is None:
             self._zoom_timer = QTimer()
             self._zoom_timer.setSingleShot(True)
-            self._zoom_timer.timeout.connect(self.update_stats)
+            self._zoom_timer.timeout.connect(self._zoom_timeout_cb)
+        self._zoom_snapshot_axes_count = len(w.axes)
         self._zoom_timer.start(200)
+
+    def _zoom_timeout_cb(self) -> None:
+        """缩放防抖回调：Y轴自适应 + 重绘 + 统计更新。
+
+        如果 axes 数量在防抖期间发生了变化（如布局切换），
+        则跳过过期回调，避免对已销毁的 axes 操作。
+        """
+        if len(self.w.axes) != self._zoom_snapshot_axes_count:
+            return
+        self._adjust_y_limits()
+        self.w.canvas.draw_idle()
+        self.update_stats()
 
     # ── 统计更新 ──
 

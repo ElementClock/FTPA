@@ -12,12 +12,14 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+import numpy as np
 from matplotlib.ticker import FuncFormatter
 
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import QMenu, QMessageBox
 
 from ..time_utils import format_time_seconds
+from ._downsampler import min_max_downsample, DOWNSAMPLE_THRESHOLD
 
 if TYPE_CHECKING:
     from .panel_plot import PlotCanvasWidget
@@ -31,15 +33,49 @@ class PlotRenderer:
 
     # ── 数据绘制 ──
 
+    def _get_render_data(self, f: str) -> tuple[np.ndarray, np.ndarray] | None:
+        """获取信号 f 的渲染数据（大数据集自动降采样）。
+
+        Returns:
+            (time, data) 渲染用的时间/数据数组，或 None（数据不可用）。
+        """
+        w = self.w
+        data_arr = w.ctx.data.get(f)
+        if data_arr is None or w.ctx.time_sec is None:
+            return None
+
+        # 检测是否需要降采样：根据当前视图范围
+        try:
+            xlim = w.axes[0].get_xlim() if w.axes else None
+        except Exception:
+            xlim = None
+
+        if xlim is not None:
+            t_start, t_end = float(xlim[0]), float(xlim[1])
+            n_total = len(w.ctx.time_sec)
+            # 粗略估计可见点数
+            i_start = np.searchsorted(w.ctx.time_sec, t_start, side="left")
+            i_end = np.searchsorted(w.ctx.time_sec, t_end, side="right")
+            n_visible = i_end - i_start
+
+            if n_visible > DOWNSAMPLE_THRESHOLD:
+                ds_time, ds_data = min_max_downsample(
+                    w.ctx.time_sec, data_arr, t_start, t_end
+                )
+                return ds_time, ds_data
+
+        return w.ctx.time_sec, data_arr
+
     def plot_subplot(self, ax, idx: int, crossing_fields: set[str]) -> None:
         """在子图 ax 上绘制第 idx 组信号，并将出现的信号名加入 crossing_fields。"""
         w = self.w
         fields = w.subplot_fields.get(idx, [])
         if fields:
             for f in fields:
-                data_arr = w.ctx.data.get(f)
-                if data_arr is not None and w.ctx.time_sec is not None:
-                    ax.plot(w.ctx.time_sec, data_arr, linewidth=0.8, label=w.ctx.get_label(f))
+                render_data = self._get_render_data(f)
+                if render_data is not None:
+                    t, d = render_data
+                    ax.plot(t, d, linewidth=0.8, label=w.ctx.get_label(f))
                     crossing_fields.add(f)
             if len(fields) > 1:
                 ax.legend(fontsize=8)
@@ -63,9 +99,10 @@ class PlotRenderer:
             fields = w.subplot_fields.get(i, [])
             if fields:
                 for f in fields:
-                    data_arr = w.ctx.data.get(f)
-                    if data_arr is not None and w.ctx.time_sec is not None:
-                        ax.plot(w.ctx.time_sec, data_arr, linewidth=0.8, label=w.ctx.get_label(f))
+                    render_data = self._get_render_data(f)
+                    if render_data is not None:
+                        t, d = render_data
+                        ax.plot(t, d, linewidth=0.8, label=w.ctx.get_label(f))
                         crossing_fields.add(f)
                 if len(fields) > 1:
                     ax.legend(fontsize=8)
@@ -240,3 +277,5 @@ class PlotRenderer:
         # 记录初始时间范围（供 reset_zoom 恢复）
         w._crossing.save_initial_time_range()
         w._crossing.update_stats()
+        # 重置平移状态，避免悬空引用
+        w._pan.reset()

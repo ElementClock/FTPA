@@ -44,6 +44,7 @@ from .services import DataContext
 from ._layout_ctrl import LayoutController
 from ._plot_renderer import PlotRenderer
 from ._crossing_analyzer import CrossingAnalyzer
+from ._pan_ctrl import PanController
 
 # 确保使用 Qt 后端（仅在 matplotlib 尚未初始化后端时设置）
 if matplotlib.get_backend() == "_agg":
@@ -53,10 +54,11 @@ if matplotlib.get_backend() == "_agg":
 class PlotCanvasWidget(QWidget):
     """交互绘图画布面板 — 动态子图布局。
 
-    外部 API 保持不变，内部委托给三个控制器：
+    外部 API 保持不变，内部委托给四个控制器：
     - _layout: LayoutController — 布局模式 + 子图选择
     - _renderer: PlotRenderer — 数据绘制 + 信号管理
     - _crossing: CrossingAnalyzer — 穿越分析 + 统计更新
+    - _pan: PanController — 拖拽水平平移
     """
 
     # 子图选中信号（发送子图索引，0-based）
@@ -90,6 +92,7 @@ class PlotCanvasWidget(QWidget):
         self._layout = LayoutController(self)
         self._renderer = PlotRenderer(self)
         self._crossing = CrossingAnalyzer(self)
+        self._pan = PanController(self)
 
         # 构建 UI
         self._build_ui()
@@ -108,10 +111,69 @@ class PlotCanvasWidget(QWidget):
         layout.addWidget(self.canvas, 1)
 
     def _connect_events(self):
-        """连接画布事件。"""
-        self.canvas.mpl_connect("button_press_event", self._layout.on_canvas_click)
-        self.canvas.mpl_connect("button_release_event", self._crossing.on_canvas_zoom)
-        self.canvas.mpl_connect("scroll_event", self._crossing.on_canvas_zoom)
+        """连接画布事件。
+
+        事件分发策略：
+          - button_press: PanController 先记录，LayoutController 在 release 时按需调用
+          - motion_notify: PanController 处理拖拽平移 + 光标样式更新
+          - button_release: PanController 处理释放 → 非平移则交由 LayoutController
+          - scroll: CrossingAnalyzer 处理缩放 + Y轴自适应
+        """
+        self.canvas.mpl_connect("button_press_event", self._on_button_press)
+        self.canvas.mpl_connect("motion_notify_event", self._on_motion)
+        self.canvas.mpl_connect("button_release_event", self._on_button_release)
+        self.canvas.mpl_connect("scroll_event", self._on_scroll)
+
+    # ── 事件分发 ──
+
+    def _on_button_press(self, event) -> None:
+        """鼠标按下：PanController 记录起始位置 + 右键菜单即时响应。"""
+        # 右键中断左键平移
+        if event.button == 3 and self._pan.is_panning():
+            self._pan.reset()
+        self._pan.on_press(event)
+        # 右键菜单在 press 时即触发（不等待 release）
+        if event.button == 3 and event.inaxes is not None:
+            for i, ax in enumerate(self.axes):
+                if ax == event.inaxes and self.subplot_fields.get(i, []):
+                    self._right_clicked_axes_idx = i
+                    self._renderer.show_context_menu(event)
+                    return
+
+    def _on_motion(self, event) -> None:
+        """鼠标移动：PanController 处理拖拽平移 + 光标样式更新。"""
+        # 先处理拖拽平移
+        self._pan.on_motion(event)
+
+        # 光标样式：仅在非拖拽状态下更新
+        if not self._pan.is_panning():
+            has_data = self.ctx is not None and self.ctx.time_sec is not None and len(self.ctx.time_sec) > 0
+            if event.inaxes is not None and has_data:
+                self.canvas.setCursor(Qt.CursorShape.OpenHandCursor)
+            else:
+                self.canvas.setCursor(Qt.CursorShape.ArrowCursor)
+
+    def _on_button_release(self, event) -> None:
+        """鼠标释放：PanController 处理平移完成，非平移则交由 LayoutController。"""
+        self._pan.on_release(event)
+        if self._pan.was_panning():
+            # 平移完成后触发 Y轴自适应 + 统计更新
+            self._crossing.on_canvas_zoom(event)
+        else:
+            # 非平移 → 交给 LayoutController 处理子图选择
+            self._layout.on_canvas_click(event)
+
+    def _on_scroll(self, event) -> None:
+        """滚轮事件：平移中忽略，否则执行时间轴缩放。
+
+        路由:
+          1. 平移中 → 忽略（避免事件冲突）
+          2. 调用 _crossing.on_scroll_zoom 执行缩放
+          3. on_scroll_zoom 内部触发 on_canvas_zoom 完成防抖Y轴自适应
+        """
+        if self._pan.is_panning():
+            return
+        self._crossing.on_scroll_zoom(event)
 
     # ── 外部 API（委托到控制器）──
 
@@ -125,6 +187,7 @@ class PlotCanvasWidget(QWidget):
 
     def set_layout_mode(self, mode: str):
         """供菜单/外部调用切换布局。"""
+        self._pan.reset()
         self._layout.switch_layout(mode)
 
     def add_to_subplot(self, field_name: str):
@@ -159,10 +222,12 @@ class PlotCanvasWidget(QWidget):
 
     def set_data_context(self, ctx: DataContext):
         """设置数据上下文。"""
+        self._pan.reset()
         self._renderer.set_data_context(ctx)
 
     def clear_data_context(self) -> None:
         """清除数据上下文，清空所有子图和统计。"""
+        self._pan.reset()
         self._renderer.set_data_context(None)
         self.subplot_fields = {i: [] for i in range(len(self.axes))}
 

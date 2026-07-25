@@ -33,6 +33,8 @@ class LayoutController:
         w = self.w
         if mode == w._layout_mode:
             return
+        # 重置平移状态，避免对已销毁 axes 的悬空引用
+        w._pan.reset()
         w._layout_mode = mode
 
         # 1. 重分配信号到新布局
@@ -160,7 +162,12 @@ class LayoutController:
     # ── 子图选择 ──
 
     def on_canvas_click(self, event) -> None:
-        """画布点击事件。左键=选择子图，右键=上下文菜单。"""
+        """画布点击事件（在 button_release 时调用）。
+
+        仅处理左键子图选择。右键菜单已移至 panel_plot._on_button_press。
+        注意：此方法仅在非平移（was_panning=False）时被调用，
+        因此无需区分点击/拖拽。
+        """
         w = self.w
         if event.button == 1:  # 左键
             if event.inaxes is not None:
@@ -170,13 +177,6 @@ class LayoutController:
                         return
             else:
                 self.deselect_subplot()
-        elif event.button == 3:  # 右键
-            if event.inaxes is not None:
-                for i, ax in enumerate(w.axes):
-                    if ax == event.inaxes and w.subplot_fields.get(i, []):
-                        w._right_clicked_axes_idx = i
-                        w._renderer.show_context_menu(event)
-                        return
 
     def select_subplot(self, idx: int) -> None:
         """选中子图并通知外部。"""
