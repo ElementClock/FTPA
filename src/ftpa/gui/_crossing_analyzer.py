@@ -187,6 +187,10 @@ class CrossingAnalyzer:
         if w.ctx is None or w.ctx.time_sec is None or len(w.ctx.time_sec) < 2:
             return
 
+        # 取消待处理的防抖回调，避免过期回调在 reset 后触发
+        if self._zoom_timer is not None and self._zoom_timer.isActive():
+            self._zoom_timer.stop()
+
         # 优先使用初始时间范围缓存，否则用数据起止
         if self._initial_time_range is not None:
             t_start, t_end = self._initial_time_range
@@ -199,6 +203,9 @@ class CrossingAnalyzer:
 
         # 自动调整每个子图 Y 轴
         self._adjust_y_limits()
+        # 刷新 Line2D 数据：降采样状态下 Line2D 仅持有可见区间子集，
+        # reset 后 xlim 回到全量范围，必须重新评估降采样
+        w._renderer.refresh_viewport_data()
 
         w.canvas.draw_idle()
         self.update_stats()
