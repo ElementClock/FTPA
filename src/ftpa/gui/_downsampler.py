@@ -14,8 +14,8 @@ from __future__ import annotations
 
 import numpy as np
 
-DOWNSAMPLE_THRESHOLD: int = 10000  # 可见点数超过此值时触发降采样
-DOWNSAMPLE_TARGET: int = 2000  # 降采样目标点数
+DOWNSAMPLE_THRESHOLD: int = 3000  # 可见点数超过此值时触发降采样
+DOWNSAMPLE_TARGET: int = 1500  # 降采样目标点数
 
 
 def min_max_downsample(
@@ -83,7 +83,7 @@ def min_max_downsample(
     # 5. 过滤全 NaN 桶（d_min 为 NaN 表示该桶全 NaN）
     valid = ~np.isnan(d_min)
     if not np.any(valid):
-        return vis_time.copy(), vis_data.copy()
+        return np.array([], dtype=np.float64), np.array([], dtype=np.float64)
 
     # 仅对有效桶计算 argmin/argmax（避免全 NaN 桶触发 ValueError）
     d_valid = d_reshaped[valid]
@@ -106,15 +106,18 @@ def min_max_downsample(
     t_min[swap], t_max[swap] = t_max[swap].copy(), t_min[swap].copy()
     d_min[swap], d_max[swap] = d_max[swap].copy(), d_min[swap].copy()
 
-    # 7. 交错合并 min 和 max
-    result_time = np.empty(2 * len(t_min), dtype=np.float64)
-    result_data = np.empty(2 * len(d_min), dtype=np.float64)
-    result_time[0::2] = t_min
-    result_time[1::2] = t_max
-    result_data[0::2] = d_min
-    result_data[1::2] = d_max
+    # 7. 交错合并 min 和 max（不插 NaN 分隔符，保持线段连续）
+    #    每桶 2 个点 (min, max)，桶间直接相连
+    n_valid = len(t_min)
+    result_time = np.empty(2 * n_valid, dtype=np.float64)
+    result_data = np.empty(2 * n_valid, dtype=np.float64)
+    for i in range(n_valid):
+        result_time[2 * i] = t_min[i]
+        result_data[2 * i] = d_min[i]
+        result_time[2 * i + 1] = t_max[i]
+        result_data[2 * i + 1] = d_max[i]
 
-    # 8. 处理尾部余量（usable 之后的点）
+    # 8. 处理尾部余量（usable 之后的点），直接追加（保持连续）
     if usable < n_visible:
         tail_t = vis_time[usable:]
         tail_d = vis_data[usable:]

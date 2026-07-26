@@ -82,6 +82,22 @@ class PlotRenderer:
 
         return w.ctx.time_sec, data_arr
 
+    def refresh_viewport_data(self) -> None:
+        """根据当前视图范围重新评估降采样，刷新所有 Line2D 数据。
+
+        缩放/平移后调用，保证 Line2D 数据始终与当前视图匹配：
+        - 视图范围大（> 阈值）：使用降采样数据
+        - 视图范围小（< 阈值）：使用原始全分辨率数据
+
+        性能：仅更新 Line2D 数据，不触发 axes 重建或 tight_layout。
+        """
+        for (idx, f), line in list(self._line_cache.items()):
+            render_data = self._get_render_data(f)
+            if render_data is not None:
+                t, d = render_data
+                line.set_xdata(t)
+                line.set_ydata(d)
+
     def plot_subplot(self, ax, idx: int, crossing_fields: set[str]) -> None:
         """在子图 ax 上绘制第 idx 组信号，并将出现的信号名加入 crossing_fields。
 

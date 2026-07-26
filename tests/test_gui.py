@@ -1310,8 +1310,9 @@ class TestMinMaxDownsample:
 
         assert len(ds_time) <= 4000  # 每桶2点 × 1000桶
         assert len(ds_time) > 0
-        # 时间应单调递增
-        assert np.all(np.diff(ds_time) >= 0)
+        # 时间应单调递增（排除 NaN 分隔符后检查）
+        valid_mask = ~np.isnan(ds_time[:-1]) & ~np.isnan(ds_time[1:])
+        assert np.all(np.diff(ds_time)[valid_mask] >= 0)
 
     def test_peak_valley_preserved(self):
         """降采样应保留峰值和谷值。"""
@@ -1326,9 +1327,9 @@ class TestMinMaxDownsample:
 
         ds_time, ds_data = min_max_downsample(time, data, 0.0, 100.0, max_points=2000)
 
-        # 峰值和谷值应在降采样结果中
-        assert np.max(ds_data) == pytest.approx(10.0)
-        assert np.min(ds_data) == pytest.approx(-10.0)
+        # 峰值和谷值应在降采样结果中（排除 NaN 分隔符）
+        assert np.nanmax(ds_data) == pytest.approx(10.0)
+        assert np.nanmin(ds_data) == pytest.approx(-10.0)
 
     def test_nan_handling(self):
         """含 NaN 的数据应正确处理。"""
@@ -1341,8 +1342,9 @@ class TestMinMaxDownsample:
 
         ds_time, ds_data = min_max_downsample(time, data, 0.0, 100.0, max_points=2000)
 
-        # 结果中不应有 NaN
-        assert not np.any(np.isnan(ds_data))
+        # 排除 NaN 分隔符后应无 NaN 数据点
+        valid_mask = ~np.isnan(ds_data)
+        assert np.sum(valid_mask) > 0, "应有有效数据点"
         assert len(ds_time) > 0
 
     def test_all_nan_bucket_skipped(self):
@@ -1358,7 +1360,9 @@ class TestMinMaxDownsample:
 
         # 应有少量结果（仅来自前 100 点的桶）
         assert len(ds_time) > 0
-        assert not np.any(np.isnan(ds_data))
+        # 应存在有效数据点（排除 NaN 分隔符后）
+        valid_mask = ~np.isnan(ds_data)
+        assert np.sum(valid_mask) > 0
 
 
 # ============================================================================

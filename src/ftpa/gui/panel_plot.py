@@ -171,7 +171,8 @@ class PlotCanvasWidget(QWidget):
         """鼠标释放：PanController 处理平移完成，非平移则交由 LayoutController。"""
         self._pan.on_release(event)
         if self._pan.was_panning():
-            # 平移完成后触发 Y轴自适应 + 统计更新
+            # 平移完成后刷新 Line2D 数据 + Y轴自适应 + 统计更新
+            self._renderer.refresh_viewport_data()
             self._crossing.on_canvas_zoom(event)
         else:
             # 非平移 → 交给 LayoutController 处理子图选择

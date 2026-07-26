@@ -455,7 +455,7 @@ class CrossingAnalyzer:
         self._zoom_timer.start(200)
 
     def _zoom_timeout_cb(self) -> None:
-        """缩放防抖回调：Y轴自适应 + 重绘 + 统计更新。
+        """缩放防抖回调：Y轴自适应 + 数据刷新 + 统计更新。
 
         如果 axes 数量在防抖期间发生了变化（如布局切换），
         则跳过过期回调，避免对已销毁的 axes 操作。
@@ -463,6 +463,8 @@ class CrossingAnalyzer:
         if len(self.w.axes) != self._zoom_snapshot_axes_count:
             return
         self._adjust_y_limits()
+        # 根据当前视图刷新 Line2D 数据（缩放后数据可能需降采样/取消降采样）
+        self.w._renderer.refresh_viewport_data()
         self.w.canvas.draw_idle()
         self.update_stats()
 
