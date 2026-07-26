@@ -65,6 +65,8 @@ class PlotCanvasWidget(QWidget):
     subplot_selected = Signal(object)  # int | None
     # 拖放参数添加信号（通知 MainWindow 更新指示器）
     param_dropped = Signal(str)       # 参数 field_name
+    # 子图信号列表变化（添加/删除/清空）
+    subplot_fields_changed = Signal()
     # 日志消息
     log_message = Signal(str)
 
@@ -205,10 +207,6 @@ class PlotCanvasWidget(QWidget):
     def add_to_subplot(self, field_name: str):
         """添加信号到当前选中的子图。"""
         self._renderer.add_to_subplot(field_name)
-
-    def add_to_subplot_by_index(self, idx: int, field_name: str):
-        """添加信号到指定索引的子图（供拖放使用）。"""
-        self._renderer._add_to_subplot(idx, field_name)
 
     def remove_from_subplot(self, field_name: str):
         """从当前选中的子图移除信号。"""

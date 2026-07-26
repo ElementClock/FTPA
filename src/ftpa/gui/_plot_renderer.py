@@ -312,9 +312,11 @@ class PlotRenderer:
     # ── 右键菜单 ──
 
     def show_context_menu(self, event) -> None:
-        """显示子图右键菜单：布局切换 + 添加/删除信号、清空子图。
+        """显示子图右键菜单：布局切换 + 删除信号、清空子图。
 
-        布局子菜单始终显示；信号管理选项仅在右键点击有信号的子图时显示。
+        布局子菜单始终显示；信号管理选项在右键点击子图时显示。
+        - "删除信号"：仅子图有信号时显示
+        - "清空该子图"：始终显示，无信号时灰显
         """
         w = self.w
         ctx = w.ctx
@@ -330,29 +332,14 @@ class PlotRenderer:
             act.triggered.connect(lambda _, m=mode: self._switch_layout_from_menu(m))
             layout_menu.addAction(act)
 
-        # ── 信号管理（仅在有数据的子图上显示）──
+        # ── 信号管理（右键点击子图时显示）──
         idx = w._right_clicked_axes_idx
         current_fields = w.subplot_fields.get(idx, []) if idx is not None else []
 
-        if ctx is not None and idx is not None and current_fields:
+        if ctx is not None and idx is not None:
             menu.addSeparator()
 
-            # 添加信号子菜单
-            add_menu = menu.addMenu("添加信号")
-            all_fields = ctx.get_field_names()
-            for f in all_fields:
-                label = ctx.get_label(f)
-                if f not in current_fields:
-                    act = QAction(f"  {label}", w)
-                    act.setData(f)
-                    act.triggered.connect(lambda _, ff=f: self._add_to_subplot(idx, ff))
-                    add_menu.addAction(act)
-                else:
-                    act = QAction(f"✓ {label}", w)
-                    act.setEnabled(False)
-                    add_menu.addAction(act)
-
-            # 删除信号子菜单
+            # 删除信号子菜单（仅子图有信号时显示）
             if current_fields:
                 del_menu = menu.addMenu("删除信号")
                 for f in current_fields:
@@ -361,9 +348,10 @@ class PlotRenderer:
                     act.setData(f)
                     act.triggered.connect(lambda _, ff=f: self._remove_from_subplot(idx, ff))
                     del_menu.addAction(act)
+                menu.addSeparator()
 
-            menu.addSeparator()
             act_clear = QAction("清空该子图", w)
+            act_clear.setEnabled(bool(current_fields))
             act_clear.triggered.connect(lambda: self._clear_subplot(idx))
             menu.addAction(act_clear)
 
@@ -375,7 +363,7 @@ class PlotRenderer:
         self.w.set_layout_mode(mode)
 
     def _add_to_subplot(self, idx: int, field: str) -> None:
-        """右键菜单：添加信号 field 到指定子图 idx。"""
+        """向指定子图 idx 添加信号 field（供拖放和内部调用）。"""
         w = self.w
         max_per_plot = LayoutController.LAYOUT_CONFIG.get(w._layout_mode, (0, 5))[1]
         if max_per_plot > 0 and len(w.subplot_fields.get(idx, [])) >= max_per_plot:
@@ -387,6 +375,7 @@ class PlotRenderer:
             w.subplot_fields[idx].append(field)
             label = w.ctx.get_label(field) if w.ctx else field
             w.log_message.emit(f"添加信号 [{label}] 到子图 {idx + 1}")
+            w.subplot_fields_changed.emit()
             self.rebuild_plot()
 
     def _remove_from_subplot(self, idx: int, field: str) -> None:
@@ -394,13 +383,18 @@ class PlotRenderer:
         w = self.w
         if idx in w.subplot_fields and field in w.subplot_fields[idx]:
             w.subplot_fields[idx].remove(field)
+            label = w.ctx.get_label(field) if w.ctx else field
+            w.log_message.emit(f"从子图 {idx + 1} 移除信号 [{label}]")
+            w.subplot_fields_changed.emit()
             self.rebuild_plot()
 
     def _clear_subplot(self, idx: int) -> None:
         """清空指定子图 idx 的所有信号。"""
         w = self.w
-        if idx in w.subplot_fields:
+        if idx in w.subplot_fields and w.subplot_fields[idx]:
             w.subplot_fields[idx] = []
+            w.log_message.emit(f"已清空子图 {idx + 1}")
+            w.subplot_fields_changed.emit()
             self.rebuild_plot()
 
     def clear_selected_subplot(self) -> None:

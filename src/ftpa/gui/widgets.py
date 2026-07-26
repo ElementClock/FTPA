@@ -184,12 +184,9 @@ class CrossingCtrl(QWidget):
 
 
 class ParameterTreeWidget(QWidget):
-    """参数树面板：搜索 + 树形列表 + 加入/删除按钮。"""
+    """参数树面板：搜索 + 树形列表。"""
 
     # 信号
-    add_clicked = Signal(str)          # 参数 field_name
-    remove_clicked = Signal(str)       # 参数 field_name
-    clear_clicked = Signal()           # 清空当前选中子图所有参数
     param_selected = Signal(str)       # 参数 field_name
 
     def __init__(self, parent: QWidget | None = None):
@@ -223,25 +220,6 @@ class ParameterTreeWidget(QWidget):
         self.tree.setSelectionMode(QTreeWidget.SingleSelection)
         self.tree.itemClicked.connect(self._on_item_clicked)
         layout.addWidget(self.tree, 1)
-
-        # 加入/删除按钮
-        btn_layout = QHBoxLayout()
-        self.add_btn = QPushButton("加入")
-        self.add_btn.setEnabled(False)
-        self.add_btn.clicked.connect(self._on_add)
-        btn_layout.addWidget(self.add_btn)
-
-        self.remove_btn = QPushButton("删除")
-        self.remove_btn.setEnabled(False)
-        self.remove_btn.clicked.connect(self._on_remove)
-        btn_layout.addWidget(self.remove_btn)
-
-        self.clear_btn = QPushButton("清空")
-        self.clear_btn.setEnabled(False)
-        self.clear_btn.clicked.connect(self._on_clear)
-        btn_layout.addWidget(self.clear_btn)
-
-        layout.addLayout(btn_layout)
 
     def set_params(self, field_labels: dict[str, str]):
         """设置参数列表：field_name -> display_label。"""
@@ -292,7 +270,6 @@ class ParameterTreeWidget(QWidget):
     def set_selected_subplot(self, idx: int | None):
         """设置当前选中的子图索引。"""
         self._selected_subplot = idx
-        self._update_button_states()
 
     def _on_search(self, text: str):
         """搜索过滤：隐藏不匹配的参数项。"""
@@ -310,46 +287,6 @@ class ParameterTreeWidget(QWidget):
         field_name = item.data(0, Qt.UserRole)
         self._selected_param = field_name
         self.param_selected.emit(field_name)
-        self._update_button_states()
-
-    def _on_add(self):
-        if self._selected_param:
-            self.add_clicked.emit(self._selected_param)
-
-    def _on_remove(self):
-        if self._selected_param:
-            self.remove_clicked.emit(self._selected_param)
-
-    def _on_clear(self):
-        self.clear_clicked.emit()
-
-    def _update_button_states(self):
-        """根据当前选择状态更新按钮启用/禁用。"""
-        subplot_selected = self._selected_subplot is not None
-        param_selected = self._selected_param is not None
-
-        if not subplot_selected or not param_selected:
-            self.add_btn.setEnabled(False)
-            self.remove_btn.setEnabled(False)
-            self._update_clear_btn()
-            return
-
-        # 检查参数是否已在选中的子图中
-        in_subplot = False
-        if self._selected_subplot in self._subplot_fields:
-            in_subplot = self._selected_param in self._subplot_fields[self._selected_subplot]
-
-        self.add_btn.setEnabled(not in_subplot)
-        self.remove_btn.setEnabled(in_subplot)
-        self._update_clear_btn()
-
-    def _update_clear_btn(self):
-        """更新清空按钮状态：需要选中子图且子图内有信号。"""
-        subplot_selected = self._selected_subplot is not None
-        has_fields = False
-        if subplot_selected and self._selected_subplot in self._subplot_fields:
-            has_fields = len(self._subplot_fields[self._selected_subplot]) > 0
-        self.clear_btn.setEnabled(subplot_selected and has_fields)
 
 
 class StatsTableWidget(QTableWidget):

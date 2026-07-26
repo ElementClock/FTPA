@@ -86,11 +86,9 @@ class MainWindow(QMainWindow):
         self.plot_widget.log_message.connect(self._append_log)
         self.plot_widget.subplot_selected.connect(self._on_subplot_selected)
         self.plot_widget.param_dropped.connect(self._on_param_dropped)
+        self.plot_widget.subplot_fields_changed.connect(self._on_subplot_fields_changed)
 
         self.param_tree = ParameterTreeWidget()
-        self.param_tree.add_clicked.connect(self._on_add_param)
-        self.param_tree.remove_clicked.connect(self._on_remove_param)
-        self.param_tree.clear_clicked.connect(self._on_clear_param)
 
         self._splitter = QSplitter(Qt.Horizontal)
         self._splitter.addWidget(self.plot_widget)
@@ -307,21 +305,8 @@ class MainWindow(QMainWindow):
 
     # ── 参数树操作 ──
 
-    def _on_add_param(self, field_name: str):
-        """参数树「加入」按钮回调。"""
-        self.plot_widget.add_to_subplot(field_name)
-        self._update_param_tree_indicators()
-        self._update_master_combo()
-
-    def _on_remove_param(self, field_name: str):
-        """参数树「删除」按钮回调。"""
-        self.plot_widget.remove_from_subplot(field_name)
-        self._update_param_tree_indicators()
-        self._update_master_combo()
-
-    def _on_clear_param(self):
-        """参数树「清空」按钮回调。"""
-        self.plot_widget.clear_selected_subplot()
+    def _on_subplot_fields_changed(self):
+        """子图信号列表变化回调 — 更新参数树指示器和穿越信号下拉框。"""
         self._update_param_tree_indicators()
         self._update_master_combo()
 
