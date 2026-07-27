@@ -38,15 +38,15 @@ def compute_fitted_circle_radius(
         R: 拟合圆半径（米），若数据不足或拟合失败则返回 NaN
     """
     # 时间区间对齐
-    idx, actual_start, actual_end = select_time_window(time_vec, start_t, end_t)
+    i_start, i_end, actual_start, actual_end = select_time_window(time_vec, start_t, end_t)
 
     # 检查长度一致性
     if len(longitude) != len(time_vec) or len(latitude) != len(time_vec):
         raise ValueError('经纬度向量长度必须与 TIME 一致。')
 
     # 截取数据
-    lon = longitude[idx]
-    lat = latitude[idx]
+    lon = longitude[i_start:i_end + 1]
+    lat = latitude[i_start:i_end + 1]
     n = len(lon)
 
     # 检查数据点数

@@ -191,9 +191,10 @@ def batch_analyze_statistics(file_pattern: str,
             data = _load_and_prepare(file_path, lm)
 
             if time_window:
-                idx, _, _ = select_time_window(data['TIME'], time_window[0], time_window[1])
+                i_start, i_end, _, _ = select_time_window(data['TIME'], time_window[0], time_window[1])
+                sl = slice(i_start, i_end + 1)
             else:
-                idx = slice(None)
+                sl = slice(None)
 
             if signals is None:
                 analysis_signals = ['总重', '相对重心', '指示空速表决值', '俯仰角表决值']
@@ -206,7 +207,7 @@ def batch_analyze_statistics(file_pattern: str,
                 try:
                     field_name = lm.get_var_name(signal_label)
                     if field_name and field_name in data:
-                        signal_data = data[field_name][idx]
+                        signal_data = data[field_name][sl]
 
                         mean_val = np.nanmean(signal_data)
                         std_val = np.nanstd(signal_data)
