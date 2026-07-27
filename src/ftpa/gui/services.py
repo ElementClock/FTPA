@@ -5,10 +5,12 @@ DataContext —— 核心数据模型，桥接所有 CLI 模块到 GUI 面板。
 
 from __future__ import annotations
 
+import logging
 import os
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
 
 from ..computing.weight_cg import add_weight_cg_to_data
 from ..computing import compute_fitted_circle_radius
@@ -28,6 +30,8 @@ from ..statistics import (
 )
 from ..time_utils import time_to_seconds_array
 from ..utils.strings import column_to_field_name
+
+logger = logging.getLogger(__name__)
 
 DATA_DIRS = [
     Path(__file__).resolve().parents[2],  # project root
@@ -80,6 +84,7 @@ class FieldResolver:
                 try:
                     result[field] = self._lm.get_label(field)
                 except Exception:
+                    logger.debug("标签获取失败，回退到字段名: field=%s", field, exc_info=True)
                     result[field] = field
             else:
                 result[field] = field
@@ -331,6 +336,7 @@ class DataContext:
                     self.lm = LabelMap(excel_path)
                     add_weight_cg_to_data(self.data, self.lm)
                 except Exception as e:
+                    logger.warning("映射表加载失败，将使用无标签模式: %s", e)
                     self.lm = None
             else:
                 self.lm = None
@@ -342,9 +348,22 @@ class DataContext:
             self.stats_service.update(self.data, self.lm, True, self.field_resolver)
             self._loaded = True
             return True, ""
+        except FileNotFoundError as e:
+            self._loaded = False
+            return False, f"文件不存在: {e}"
+        except (pd.errors.ParserError, ValueError) as e:
+            self._loaded = False
+            return False, f"文件格式错误: {e}"
+        except MemoryError as e:
+            self._loaded = False
+            return False, f"内存不足，文件过大: {e}"
+        except OSError as e:
+            self._loaded = False
+            return False, f"文件读取失败: {e}"
         except Exception as e:
             self._loaded = False
-            return False, str(e)
+            logger.exception("数据加载未知错误")
+            return False, f"加载失败: {e}"
 
     def _load_csv(self, data_path: str, excel_path: str) -> tuple[bool, str]:
         """CSV 格式飞参数据加载。
@@ -378,9 +397,22 @@ class DataContext:
             self.stats_service.update(self.data, self.lm, True, self.field_resolver)
             self._loaded = True
             return True, ""
+        except FileNotFoundError as e:
+            self._loaded = False
+            return False, f"文件不存在: {e}"
+        except (pd.errors.ParserError, ValueError) as e:
+            self._loaded = False
+            return False, f"文件格式错误: {e}"
+        except MemoryError as e:
+            self._loaded = False
+            return False, f"内存不足，文件过大: {e}"
+        except OSError as e:
+            self._loaded = False
+            return False, f"文件读取失败: {e}"
         except Exception as e:
             self._loaded = False
-            return False, str(e)
+            logger.exception("数据加载未知错误")
+            return False, f"加载失败: {e}"
 
     def unload(self) -> None:
         """卸载当前数据，释放内存，重置所有状态。
@@ -463,7 +495,7 @@ class DataContext:
                     else:
                         signals[:, i] = np.asarray(col, dtype=np.float64)
                 except (ValueError, TypeError):
-                    pass  # 非数值列跳过
+                    logger.debug("非数值列跳过: field=%s", f)
         return self.time_sec, signals, labels
 
     # -- 统计 --

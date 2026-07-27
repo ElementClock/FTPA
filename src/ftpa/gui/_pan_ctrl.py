@@ -213,6 +213,7 @@ class PanController:
                 return None
             return span / width
         except Exception:
+            logger.debug("X 轴缩放比计算失败", exc_info=True)
             return None
 
     def _apply_pan(self, dx_data: float) -> None:
