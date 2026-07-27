@@ -218,6 +218,14 @@ class PlotRenderer:
 
         # 7. 通用装饰
         self._apply_axis_decorations()
+
+        # 8. 同步所有子图 X 轴范围：以 axes[0] 为基准
+        #    防止增量更新中新建 Line2D（ax.plot()）触发自动缩放导致 xlim 解耦
+        if w.axes:
+            ref_xlim = w.axes[0].get_xlim()
+            for ax in w.axes[1:]:
+                ax.set_xlim(ref_xlim)
+
         w._layout.apply_spine_color()
         w.canvas.draw_idle()
 
@@ -256,6 +264,12 @@ class PlotRenderer:
         self._apply_axis_decorations()
         w._layout.apply_spine_color()
 
+        # 全量重建后同步所有子图 X 轴范围
+        if w.axes:
+            ref_xlim = w.axes[0].get_xlim()
+            for ax in w.axes[1:]:
+                ax.set_xlim(ref_xlim)
+
         w.figure.tight_layout()
         w.canvas.draw_idle()
 
@@ -264,7 +278,7 @@ class PlotRenderer:
         w = self.w
         mode = w._layout_mode
 
-        # 确定底部子图索引
+        # 确定底部子图索引（仅底部显示 X 轴标签）
         bottom_indices: list[int] = []
         if mode == "2x2":
             bottom_indices = [2, 3]
@@ -276,7 +290,10 @@ class PlotRenderer:
 
         for i in bottom_indices:
             w.axes[i].set_xlabel("时间 (s)")
-            w.axes[i].xaxis.set_major_formatter(FuncFormatter(
+
+        # 为所有子图设置时间格式化器，确保各子图 X 轴刻度显示一致
+        for ax in w.axes:
+            ax.xaxis.set_major_formatter(FuncFormatter(
                 lambda s, _: format_time_seconds(float(s))))
 
     # ── 信号管理 ──

@@ -132,11 +132,18 @@ class LayoutController:
                 if w.ctx is not None:
                     w._renderer.plot_subplot(ax, i, crossing_fields)
 
-        # 设置底部子图的 X 轴标签和时间格式化
+        # 设置底部子图的 X 轴标签，并为所有子图设置时间格式化
         self._apply_bottom_axis_labels(mode)
 
+        # 同步所有子图 X 轴范围：以 axes[0] 为基准
+        # 防止各子图因 ax.plot() 自动缩放而产生不一致的 xlim
+        if w.axes:
+            ref_xlim = w.axes[0].get_xlim()
+            for ax in w.axes[1:]:
+                ax.set_xlim(ref_xlim)
+
     def _apply_bottom_axis_labels(self, mode: str) -> None:
-        """为布局模式的底部子图设置 X 轴标签和时间格式化。"""
+        """为布局模式的底部子图设置 X 轴标签，并为所有子图设置时间格式化器。"""
         w = self.w
         bottom_indices: list[int] = []
 
@@ -148,9 +155,13 @@ class LayoutController:
             # Nx1 模式（2x1, 3x1, 4x1）：仅最底部一个子图
             bottom_indices = [len(w.axes) - 1]
 
+        # 仅为底部子图设置 X 轴标签（避免冗余）
         for i in bottom_indices:
             w.axes[i].set_xlabel("时间 (s)")
-            w.axes[i].xaxis.set_major_formatter(
+
+        # 为所有子图设置时间格式化器，确保各子图 X 轴刻度显示一致
+        for ax in w.axes:
+            ax.xaxis.set_major_formatter(
                 FuncFormatter(lambda s, _: format_time_seconds(float(s))))
 
     def rebuild_axes_for_mode(self) -> None:
