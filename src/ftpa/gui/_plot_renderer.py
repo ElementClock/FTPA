@@ -26,7 +26,8 @@ from PySide6.QtWidgets import QMenu, QMessageBox
 
 from ..time_utils import format_time_seconds
 from ._layout_ctrl import LayoutController
-from ._downsampler import min_max_downsample, DOWNSAMPLE_THRESHOLD
+from ._downsampler import min_max_downsample
+from ..config import CONFIG
 
 if TYPE_CHECKING:
     from .panel_plot import PlotCanvasWidget
@@ -74,7 +75,7 @@ class PlotRenderer:
             i_end = np.searchsorted(w.ctx.time_sec, t_end, side="right")
             n_visible = i_end - i_start
 
-            if n_visible > DOWNSAMPLE_THRESHOLD:
+            if n_visible > CONFIG.plot.downsample_threshold:
                 ds_time, ds_data = min_max_downsample(
                     w.ctx.time_sec, data_arr, t_start, t_end
                 )

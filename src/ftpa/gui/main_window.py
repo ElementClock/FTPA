@@ -48,6 +48,7 @@ from .panel_plot import PlotCanvasWidget
 from .services import DataContext
 from .widgets import ParameterTreeWidget
 from .. import __version__
+from ..config import CONFIG
 
 import logging
 logger = logging.getLogger(__name__)
@@ -70,7 +71,7 @@ class MainWindow(QMainWindow):
     def _build_ui(self):
         self.setWindowTitle("FTPA - 飞机性能操稳数据分析系统")
         self.setMinimumSize(1024, 680)
-        self.resize(1400, 860)
+        self.resize(CONFIG.gui.window_width, CONFIG.gui.window_height)
 
         # 菜单栏
         self._build_menu()
