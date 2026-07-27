@@ -299,7 +299,7 @@ class DataContext:
             return ['数据中无 TIME 字段']
 
         TIME = self.data['TIME']
-        idx, t_start_actual, t_end_actual = select_time_window(TIME, t_start, t_end)
+        i_start, i_end, t_start_actual, t_end_actual = select_time_window(TIME, t_start, t_end)
         lines = []
 
         # 确定要处理的字段
@@ -318,7 +318,7 @@ class DataContext:
             if not np.issubdtype(signal.dtype, np.number) and signal.dtype != bool:
                 continue
 
-            segment = signal[idx]
+            segment = signal[i_start:i_end + 1]
             label = field_name  # CSV 列名即为标签
 
             if len(segment) == 0:
@@ -353,7 +353,7 @@ class DataContext:
         if TIME is None:
             return ['数据中无 TIME 字段']
 
-        idx, _, _ = select_time_window(TIME, t_start, t_end)
+        i_start, i_end, _, _ = select_time_window(TIME, t_start, t_end)
 
         fields = [s if s in self.data else '' for s in signal_ids]
         labels = signal_ids  # CSV 列名即为标签
@@ -368,7 +368,7 @@ class DataContext:
         if len(main_sig) != len(TIME):
             return [f'主信号 "{main_label}" 与时间向量长度不一致']
 
-        main_sig = main_sig[idx]
+        main_sig = main_sig[i_start:i_end + 1]
         cross_idx_local = find_crossing_points(main_sig, threshold, mode)
 
         if cross_idx_local is None:
@@ -392,7 +392,7 @@ class DataContext:
                 lines.append(f'    {display_name} = (长度不一致)')
                 continue
 
-            val = other_sig[idx]
+            val = other_sig[i_start:i_end + 1]
             cross_idx = cross_idx_local - 1
             lines.append(f'    {display_name} = {val[cross_idx]:.2f}')
 

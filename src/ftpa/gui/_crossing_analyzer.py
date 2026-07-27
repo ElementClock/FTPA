@@ -174,9 +174,10 @@ class CrossingAnalyzer:
         master_arr = np.asarray(master_data, dtype=float)
 
         # 选取窗口内的数据索引
-        search_mask = (time_sec >= t_start_sec) & (time_sec <= t_end_sec)
-        sub_time = time_sec[search_mask]
-        sub_sig = master_arr[search_mask]
+        i_start = np.searchsorted(time_sec, t_start_sec, side="left")
+        i_end = np.searchsorted(time_sec, t_end_sec, side="right")
+        sub_time = time_sec[i_start:i_end]
+        sub_sig = master_arr[i_start:i_end]
 
         # 移除 NaN 以避免穿越检测失败
         valid = ~np.isnan(sub_sig)
@@ -563,6 +564,10 @@ class CrossingAnalyzer:
         lines.append(f"时间窗口: {format_time_seconds(t_start)} - {format_time_seconds(t_end)}")
 
         # 各子图的信号统计
+        time_sec = w.ctx.time_sec
+        i_start = np.searchsorted(time_sec, t_start, side="left")
+        i_end = np.searchsorted(time_sec, t_end, side="right")
+
         for i in sorted(w.subplot_fields.keys()):
             fields = w.subplot_fields[i]
             if not fields:
@@ -571,8 +576,7 @@ class CrossingAnalyzer:
                 arr = w.ctx.data.get(f)
                 if arr is None:
                     continue
-                idx = (w.ctx.time_sec >= t_start) & (w.ctx.time_sec <= t_end)
-                seg = arr[idx]
+                seg = arr[i_start:i_end]
                 if len(seg) > 0:
                     label = w.ctx.get_label(f)
                     lines.append(f"  {label}: min={np.min(seg):.4g}, max={np.max(seg):.4g}, mean={np.mean(seg):.4g}")

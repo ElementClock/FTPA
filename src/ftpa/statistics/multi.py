@@ -37,7 +37,7 @@ def _compute_var_stats_data(time_vec: np.ndarray, start_t: Union[float, str],
         raise ValueError(f'变量参数必须为 (data, name, stat_type) 三元组，当前额外参数个数为 {n_var_args}。')
 
     num_vars = n_var_args // 3
-    idx, actual_start, actual_end = select_time_window(time_vec, start_t, end_t)
+    i_start, i_end, actual_start, actual_end = select_time_window(time_vec, start_t, end_t)
 
     var_names = []
     descs = []
@@ -51,7 +51,7 @@ def _compute_var_stats_data(time_vec: np.ndarray, start_t: Union[float, str],
         if len(time_vec) != len(data):
             raise ValueError(f'TIME 与变量 "{name}" 的长度必须相同。')
 
-        segment = data[idx]
+        segment = data[i_start:i_end + 1]
         val, desc = compute_stat(segment, stat_type)
 
         var_names.append(name)
@@ -103,7 +103,7 @@ def _show_group_stats_data(time_vec: np.ndarray, start_t: Union[float, str],
     返回:
         results: 列表，每项为 (name_str, desc, val_str) 元组
     """
-    idx, actual_start, actual_end = select_time_window(time_vec, start_t, end_t)
+    i_start, i_end, actual_start, actual_end = select_time_window(time_vec, start_t, end_t)
 
     n_args = len(group_args)
     if n_args % 3 != 0:
@@ -130,7 +130,7 @@ def _show_group_stats_data(time_vec: np.ndarray, start_t: Union[float, str],
 
         vals = []
         for k in range(n_vars):
-            segment = data_list[k][idx]
+            segment = data_list[k][i_start:i_end + 1]
             val, desc = compute_stat(segment, stat_type)
             vals.append(val)
 
@@ -186,7 +186,7 @@ def statistics_params(t_start: Union[float, str], t_end: Union[float, str],
         raise ValueError('data 必须包含 TIME 字段。')
 
     TIME = data['TIME']
-    idx, t_start_actual, t_end_actual = select_time_window(TIME, t_start, t_end)
+    i_start, i_end, t_start_actual, t_end_actual = select_time_window(TIME, t_start, t_end)
 
     lines = []
 
@@ -224,7 +224,7 @@ def statistics_params(t_start: Union[float, str], t_end: Union[float, str],
         if not np.issubdtype(signal.dtype, np.number) and signal.dtype != bool:
             continue
 
-        segment = signal[idx]
+        segment = signal[i_start:i_end + 1]
         label = lm.get_label(field_name)
 
         if len(segment) == 0:
@@ -275,7 +275,7 @@ def crossing_analysis(data: Dict[str, np.ndarray], lm: LabelMap,
         raise ValueError('signal_ids 必须为非空列表。')
 
     TIME = data.get('TIME', data.get('TIME_sec'))
-    idx, t_start_actual, t_end_actual = select_time_window(TIME, t_start, t_end)
+    i_start, i_end, t_start_actual, t_end_actual = select_time_window(TIME, t_start, t_end)
 
     n_signals = len(signal_ids)
     fields = []
@@ -305,7 +305,7 @@ def crossing_analysis(data: Dict[str, np.ndarray], lm: LabelMap,
     if len(main_sig) != len(TIME):
         return [f'主信号 "{main_label}" 与时间向量长度不一致']
 
-    main_sig = main_sig[idx]
+    main_sig = main_sig[i_start:i_end + 1]
 
     cross_idx_local = find_crossing_points(main_sig, threshold, mode)
     if cross_idx_local is None:
@@ -329,7 +329,7 @@ def crossing_analysis(data: Dict[str, np.ndarray], lm: LabelMap,
             lines.append(f'    {display_name} = (长度不一致)')
             continue
 
-        val = other_sig[idx]
+        val = other_sig[i_start:i_end + 1]
         cross_idx = cross_idx_local - 1
         lines.append(f'    {display_name} = {val[cross_idx]:.2f}')
 

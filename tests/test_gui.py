@@ -1031,6 +1031,137 @@ class TestCrossingAnalyzerAdjustYLimits:
 
 
 # ============================================================================
+# update_stats 测试
+# ============================================================================
+
+class TestCrossingAnalyzerUpdateStats:
+    """测试 CrossingAnalyzer.update_stats 方法。"""
+
+    def _make_analyzer_with_stats(self, n_axes=1, fields_per_subplot=None,
+                                  time_sec=None, data_map=None, xlim=None):
+        """创建 CrossingAnalyzer 实例（mock widget），用于 update_stats 测试。"""
+        from ftpa.gui._crossing_analyzer import CrossingAnalyzer
+
+        widget = MagicMock()
+        axes = []
+        fields = {}
+        for i in range(n_axes):
+            ax = MagicMock()
+            ax.get_xlim.return_value = xlim or (0.0, 100.0)
+            axes.append(ax)
+            fields[i] = fields_per_subplot.get(i, []) if fields_per_subplot else []
+
+        widget.axes = axes
+        widget.subplot_fields = fields
+
+        ctx = MagicMock()
+        ctx.time_sec = time_sec if time_sec is not None else np.linspace(0, 100, 101)
+        ctx.data = data_map or {}
+        ctx.get_label = lambda f: f
+        widget.ctx = ctx
+
+        canvas = MagicMock()
+        widget.canvas = canvas
+
+        analyzer = CrossingAnalyzer(widget)
+        return analyzer, widget
+
+    def test_stats_text_contains_time_window(self):
+        """输出应包含时间窗口行。"""
+        analyzer, widget = self._make_analyzer_with_stats(
+            n_axes=1,
+            fields_per_subplot={0: ["sig1"]},
+            time_sec=np.linspace(0, 100, 101),
+            data_map={"sig1": np.ones(101)},
+            xlim=(0.0, 100.0),
+        )
+
+        analyzer.update_stats()
+
+        assert "时间窗口:" in analyzer.last_stats_text
+
+    def test_stats_text_contains_signal_stats(self):
+        """输出应包含信号统计（min/max/mean）。"""
+        analyzer, widget = self._make_analyzer_with_stats(
+            n_axes=1,
+            fields_per_subplot={0: ["sig1"]},
+            time_sec=np.linspace(0, 100, 101),
+            data_map={"sig1": np.sin(np.linspace(0, 2 * np.pi, 101))},
+            xlim=(0.0, 100.0),
+        )
+
+        analyzer.update_stats()
+
+        assert "sig1" in analyzer.last_stats_text
+        assert "min=" in analyzer.last_stats_text
+        assert "max=" in analyzer.last_stats_text
+        assert "mean=" in analyzer.last_stats_text
+
+    def test_stats_values_correct(self):
+        """已知数据的 min/max/mean 应与计算值一致。"""
+        time_sec = np.array([0.0, 10.0, 20.0, 30.0, 40.0])
+        sig_data = np.array([1.0, 3.0, 5.0, 7.0, 9.0])  # min=1, max=9, mean=5
+
+        analyzer, widget = self._make_analyzer_with_stats(
+            n_axes=1,
+            fields_per_subplot={0: ["sig1"]},
+            time_sec=time_sec,
+            data_map={"sig1": sig_data},
+            xlim=(0.0, 40.0),
+        )
+
+        analyzer.update_stats()
+
+        # 验证 min/max/mean 值
+        lines = analyzer.last_stats_text.split("\n")
+        sig_line = [l for l in lines if "sig1" in l][0]
+        assert "min=1" in sig_line
+        assert "max=9" in sig_line
+        assert "mean=5" in sig_line
+
+    def test_stats_with_partial_window(self):
+        """xlim 仅覆盖部分数据时，统计应只基于可见部分。"""
+        time_sec = np.array([0.0, 10.0, 20.0, 30.0, 40.0])
+        sig_data = np.array([1.0, 3.0, 5.0, 7.0, 9.0])
+
+        analyzer, widget = self._make_analyzer_with_stats(
+            n_axes=1,
+            fields_per_subplot={0: ["sig1"]},
+            time_sec=time_sec,
+            data_map={"sig1": sig_data},
+            xlim=(10.0, 30.0),  # 仅覆盖 [10, 30]，即索引 1-3: [3, 5, 7]
+        )
+
+        analyzer.update_stats()
+
+        lines = analyzer.last_stats_text.split("\n")
+        sig_line = [l for l in lines if "sig1" in l][0]
+        # min=3, max=7, mean=5
+        assert "min=3" in sig_line
+        assert "max=7" in sig_line
+        assert "mean=5" in sig_line
+
+    def test_stats_empty_window(self):
+        """xlim 在数据范围之外时，不应输出信号统计。"""
+        time_sec = np.array([0.0, 10.0, 20.0, 30.0, 40.0])
+        sig_data = np.array([1.0, 3.0, 5.0, 7.0, 9.0])
+
+        analyzer, widget = self._make_analyzer_with_stats(
+            n_axes=1,
+            fields_per_subplot={0: ["sig1"]},
+            time_sec=time_sec,
+            data_map={"sig1": sig_data},
+            xlim=(100.0, 200.0),  # 完全在数据范围之外
+        )
+
+        analyzer.update_stats()
+
+        # 应有时间窗口行，但不应有 sig1 的统计行
+        assert "时间窗口:" in analyzer.last_stats_text
+        assert "sig1" not in analyzer.last_stats_text
+
+
+# ============================================================================
 # Y 轴自适应 — 缩放防抖回调测试
 # ============================================================================
 

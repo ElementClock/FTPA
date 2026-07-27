@@ -5,7 +5,7 @@ import threading
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.widgets import Button, RadioButtons, TextBox
-from .time_utils import select_time_window, format_time_seconds
+from .time_utils import format_time_seconds
 from .statistics import find_crossing_points
 from typing import Optional, Callable
 
