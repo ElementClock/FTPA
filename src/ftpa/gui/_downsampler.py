@@ -14,8 +14,7 @@ from __future__ import annotations
 
 import numpy as np
 
-DOWNSAMPLE_THRESHOLD: int = 3000  # 可见点数超过此值时触发降采样
-DOWNSAMPLE_TARGET: int = 1500  # 降采样目标点数
+from ..config import CONFIG
 
 
 def min_max_downsample(
@@ -23,7 +22,7 @@ def min_max_downsample(
     data_arr: np.ndarray,
     t_start: float,
     t_end: float,
-    max_points: int = DOWNSAMPLE_TARGET,
+    max_points: int | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
     """对可见时间窗口内的数据执行 min-max 降采样。
 
@@ -44,6 +43,8 @@ def min_max_downsample(
         3. 向量化计算每桶的 nanmin/nanmax 及对应时间
         4. 按时间排序输出（确保单调递增）
     """
+    if max_points is None:
+        max_points = CONFIG.plot.downsample_target
     # 1. 用 searchsorted 快速定位可见窗口索引范围（O(log N)）
     i_start = np.searchsorted(time_sec, t_start, side="left")
     i_end = np.searchsorted(time_sec, t_end, side="right")

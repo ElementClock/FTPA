@@ -21,19 +21,14 @@ from PySide6.QtWidgets import QMessageBox
 
 from ..statistics import find_crossing_points
 from ..time_utils import format_time_seconds
+from ..config import CONFIG
 
 if TYPE_CHECKING:
     from .panel_plot import PlotCanvasWidget
 
 logger = logging.getLogger(__name__)
 
-# 滚轮缩放参数
-# span 最小值（秒），防止过度放大导致视觉异常
-MIN_ZOOM_SPAN: float = 1.0
-# 上滚缩放因子：span × 0.92 → 放大（8%步长，精细可控）
-ZOOM_FACTOR_IN: float = 0.92
-# 下滚缩放因子：span × 1.087 → 缩小（1/0.92≈1.087，保证来回滚动可恢复）
-ZOOM_FACTOR_OUT: float = 1.087
+
 
 
 class CrossingAnalyzer:
@@ -418,7 +413,7 @@ class CrossingAnalyzer:
                     y_min_all -= 1.0
                     y_max_all += 1.0
                 else:
-                    margin = 0.05 * (y_max_all - y_min_all)
+                    margin = CONFIG.plot.y_margin_ratio * (y_max_all - y_min_all)
                     y_min_all -= margin
                     y_max_all += margin
                 ax.set_ylim(y_min_all, y_max_all)
@@ -461,9 +456,9 @@ class CrossingAnalyzer:
             # 缩放方向：上滚放大，下滚缩小
             button = getattr(event, "button", None)
             if button == "up":
-                factor = ZOOM_FACTOR_IN
+                factor = CONFIG.zoom.factor_in
             elif button == "down":
-                factor = ZOOM_FACTOR_OUT
+                factor = CONFIG.zoom.factor_out
             else:
                 return
 
@@ -498,8 +493,8 @@ class CrossingAnalyzer:
             new_span = span * factor
             # 限制 span 范围：[MIN_ZOOM_SPAN, data_span × 2]
             max_span = data_span * 2.0 if data_span > 0 else new_span
-            if new_span < MIN_ZOOM_SPAN:
-                new_span = MIN_ZOOM_SPAN
+            if new_span < CONFIG.zoom.min_span:
+                new_span = CONFIG.zoom.min_span
             elif new_span > max_span:
                 new_span = max_span
 

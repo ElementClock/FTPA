@@ -38,6 +38,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+config = [
+    "tomli>=2.0.0;python_version<'3.11'",
+]
 dev = [
     "pytest>=9.0.0",
     "pytest-cov>=4.0.0",

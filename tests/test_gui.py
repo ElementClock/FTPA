@@ -1417,7 +1417,7 @@ class TestMinMaxDownsample:
 
     def test_small_data_no_downsample(self):
         """小数据集（≤阈值）不应降采样，直接返回原始数据。"""
-        from ftpa.gui._downsampler import min_max_downsample, DOWNSAMPLE_THRESHOLD
+        from ftpa.gui._downsampler import min_max_downsample
 
         time = np.arange(100, dtype=float)
         data = np.sin(time * 0.1)
