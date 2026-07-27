@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch, PropertyMock
 import numpy as np
 import pytest
 
-from ftpa.gui.services import DataContext
+from ftpa.gui.services import DataContext, FieldResolver, StatisticsService
 from ftpa.gui._pan_ctrl import PanController
 
 
@@ -53,6 +53,7 @@ class TestDataContext:
         """无 LabelMap 时字段标签应等于字段名本身。"""
         ctx = DataContext()
         ctx.data = {"TIME": np.array([]), "signal1": np.array([1.0, 2.0])}
+        ctx.field_resolver.update(ctx.data)
         ctx._loaded = True
         labels = ctx.get_field_labels()
         assert "signal1" in labels
@@ -62,6 +63,7 @@ class TestDataContext:
         """字段名直接匹配时 resolve_field 应返回原字段名。"""
         ctx = DataContext()
         ctx.data = {"TIME": np.array([]), "signal1": np.array([1.0])}
+        ctx.field_resolver.update(ctx.data)
         result = ctx.resolve_field("signal1")
         assert result == "signal1"
 
@@ -69,6 +71,7 @@ class TestDataContext:
         """找不到字段时 resolve_field 应返回 None。"""
         ctx = DataContext()
         ctx.data = {"TIME": np.array([]), "signal1": np.array([1.0])}
+        ctx.field_resolver.update(ctx.data)
         result = ctx.resolve_field("nonexistent")
         assert result is None
 
@@ -87,12 +90,13 @@ class TestDataContext:
         ctx = DataContext()
         # 模拟加载状态
         ctx.data = {"TIME": np.array([0.0]), "sig": np.array([1.0])}
+        ctx.field_resolver.update(ctx.data)
         ctx.time_vec = np.array([0.0])
         ctx.time_sec = np.array([0.0])
         ctx._loaded = True
         ctx.data_path = "/some/file.txt"
         ctx.excel_path = "/some/labels.xlsx"
-        ctx._label_cache = {"sig": "信号"}
+        ctx.field_resolver._label_cache = {"sig": "信号"}
 
         # 卸载
         ctx.unload()
@@ -103,7 +107,7 @@ class TestDataContext:
         assert ctx.time_sec is None
         assert ctx.data_path == ""
         assert ctx.excel_path == ""
-        assert ctx._label_cache is None
+        assert ctx.field_resolver._label_cache is None
         assert ctx.get_row_count() == 0
         assert ctx.get_column_count() == 0
         assert ctx.get_field_names() == []
@@ -120,6 +124,7 @@ class TestDataContext:
         ctx = DataContext()
         # 模拟加载
         ctx.data = {"TIME": np.array([0.0]), "sig": np.array([1.0])}
+        ctx.field_resolver.update(ctx.data)
         ctx._loaded = True
         # 卸载
         ctx.unload()
@@ -1929,3 +1934,232 @@ class TestScrollPanInteraction:
         pan._apply_pan(-20.0)
 
         widget.axes[0].set_xlim.assert_called_with(-16.0, 76.0)
+
+
+# ============================================================================
+# FieldResolver 单元测试
+# ============================================================================
+
+class TestFieldResolver:
+    """测试 FieldResolver 类。"""
+
+    def test_initial_state(self):
+        """初始状态应正确存储 data 引用。"""
+        data = {"TIME": np.array([]), "signal1": np.array([1.0])}
+        fr = FieldResolver(data)
+        assert fr._data is data
+        assert fr._lm is None
+        assert fr._label_cache is None
+
+    def test_get_field_names_excludes_meta(self):
+        """get_field_names 应排除 TIME 和元数据键。"""
+        data = {"TIME": np.array([]), "signal1": np.array([1.0]),
+                "filename": "test", "_name_mapping": {}, "signal2": np.array([2.0])}
+        fr = FieldResolver(data)
+        names = fr.get_field_names()
+        assert "TIME" not in names
+        assert "filename" not in names
+        assert "_name_mapping" not in names
+        assert "signal1" in names
+        assert "signal2" in names
+
+    def test_get_field_names_empty_data(self):
+        """空数据应返回空列表。"""
+        fr = FieldResolver({})
+        assert fr.get_field_names() == []
+
+    def test_get_field_labels_without_labelmap(self):
+        """无 LabelMap 时标签应等于字段名。"""
+        data = {"TIME": np.array([]), "signal1": np.array([1.0])}
+        fr = FieldResolver(data)
+        labels = fr.get_field_labels()
+        assert labels["signal1"] == "signal1"
+
+    def test_get_field_labels_lazy_cache(self):
+        """标签应惰性缓存，第二次调用返回同一对象。"""
+        data = {"TIME": np.array([]), "signal1": np.array([1.0])}
+        fr = FieldResolver(data)
+        labels1 = fr.get_field_labels()
+        labels2 = fr.get_field_labels()
+        assert labels1 is labels2
+
+    def test_get_label_returns_label(self):
+        """get_label 应返回对应字段的标签。"""
+        data = {"TIME": np.array([]), "signal1": np.array([1.0])}
+        fr = FieldResolver(data)
+        assert fr.get_label("signal1") == "signal1"
+        assert fr.get_label("nonexistent") == "nonexistent"
+
+    def test_resolve_field_direct_match(self):
+        """直接匹配字段名应返回原字段名。"""
+        data = {"TIME": np.array([]), "signal1": np.array([1.0])}
+        fr = FieldResolver(data)
+        assert fr.resolve_field("signal1") == "signal1"
+
+    def test_resolve_field_not_found(self):
+        """找不到字段应返回 None。"""
+        data = {"TIME": np.array([]), "signal1": np.array([1.0])}
+        fr = FieldResolver(data)
+        assert fr.resolve_field("nonexistent") is None
+
+    def test_update_clears_cache(self):
+        """update 应清除缓存。"""
+        data = {"TIME": np.array([]), "signal1": np.array([1.0])}
+        fr = FieldResolver(data)
+        fr.get_field_labels()  # 触发缓存
+        assert fr._label_cache is not None
+        fr.update({"TIME": np.array([]), "sig2": np.array([2.0])})
+        assert fr._label_cache is None
+        assert "sig2" in fr.get_field_names()
+
+    def test_clear_resets_all(self):
+        """clear 应重置所有状态。"""
+        data = {"TIME": np.array([]), "signal1": np.array([1.0])}
+        fr = FieldResolver(data)
+        fr.get_field_labels()
+        fr.clear()
+        assert fr._data == {}
+        assert fr._lm is None
+        assert fr._label_cache is None
+
+
+# ============================================================================
+# StatisticsService 单元测试
+# ============================================================================
+
+class TestStatisticsService:
+    """测试 StatisticsService 类。"""
+
+    def test_initial_state(self):
+        """初始状态应正确存储引用。"""
+        data = {"TIME": np.array([])}
+        ss = StatisticsService(data)
+        assert ss._data is data
+        assert ss._lm is None
+        assert ss._is_loaded is False
+        assert ss._field_resolver is None
+
+    def test_compute_parameter_stats_not_loaded(self):
+        """未加载时应返回数据未加载提示。"""
+        ss = StatisticsService({})
+        result = ss.compute_parameter_stats(0, 100, [])
+        assert result == ["数据未加载"]
+
+    def test_compute_crossing_analysis_not_loaded(self):
+        """未加载时应返回数据未加载提示。"""
+        ss = StatisticsService({})
+        result = ss.compute_crossing_analysis([], "FirstUp", 1.0, 0, 100)
+        assert result == ["数据未加载"]
+
+    def test_compute_takeoff_landing_stats_not_loaded(self):
+        """未加载时应返回数据未加载提示。"""
+        ss = StatisticsService({})
+        result = ss.compute_takeoff_landing_stats(0, 100)
+        assert result == "数据未加载"
+
+    def test_compute_takeoff_landing_stats_no_labelmap(self):
+        """无映射表时应返回 CSV 模式不支持提示。"""
+        data = {"TIME": np.array([])}
+        ss = StatisticsService(data, lm=None, is_loaded=True)
+        result = ss.compute_takeoff_landing_stats(0, 100)
+        assert "CSV 模式不支持" in result
+
+    def test_update_changes_state(self):
+        """update 应更新内部引用。"""
+        ss = StatisticsService({})
+        new_data = {"TIME": np.array([0.0, 1.0])}
+        fr = FieldResolver(new_data)
+        ss.update(new_data, None, True, fr)
+        assert ss._data is new_data
+        assert ss._is_loaded is True
+        assert ss._field_resolver is fr
+
+    def test_clear_resets_all(self):
+        """clear 应重置所有状态。"""
+        data = {"TIME": np.array([])}
+        fr = FieldResolver(data)
+        ss = StatisticsService(data, is_loaded=True, field_resolver=fr)
+        ss.clear()
+        assert ss._data == {}
+        assert ss._lm is None
+        assert ss._is_loaded is False
+        assert ss._field_resolver is None
+
+
+# ============================================================================
+# DataContext 组合测试
+# ============================================================================
+
+class TestDataContextComposition:
+    """测试 DataContext 的组合对象协同工作。"""
+
+    def test_init_creates_field_resolver(self):
+        """DataContext.__init__ 应创建 FieldResolver 实例。"""
+        ctx = DataContext()
+        assert isinstance(ctx.field_resolver, FieldResolver)
+
+    def test_init_creates_stats_service(self):
+        """DataContext.__init__ 应创建 StatisticsService 实例。"""
+        ctx = DataContext()
+        assert isinstance(ctx.stats_service, StatisticsService)
+
+    def test_delegation_get_field_names(self):
+        """get_field_names 应委托给 field_resolver。"""
+        ctx = DataContext()
+        ctx.data = {"TIME": np.array([]), "sig1": np.array([1.0])}
+        ctx.field_resolver.update(ctx.data)
+        assert ctx.get_field_names() == ctx.field_resolver.get_field_names()
+
+    def test_delegation_get_field_labels(self):
+        """get_field_labels 应委托给 field_resolver。"""
+        ctx = DataContext()
+        ctx.data = {"TIME": np.array([]), "sig1": np.array([1.0])}
+        ctx.field_resolver.update(ctx.data)
+        assert ctx.get_field_labels() == ctx.field_resolver.get_field_labels()
+
+    def test_delegation_get_label(self):
+        """get_label 应委托给 field_resolver。"""
+        ctx = DataContext()
+        ctx.data = {"TIME": np.array([]), "sig1": np.array([1.0])}
+        ctx.field_resolver.update(ctx.data)
+        assert ctx.get_label("sig1") == ctx.field_resolver.get_label("sig1")
+
+    def test_delegation_resolve_field(self):
+        """resolve_field 应委托给 field_resolver。"""
+        ctx = DataContext()
+        ctx.data = {"TIME": np.array([]), "sig1": np.array([1.0])}
+        ctx.field_resolver.update(ctx.data)
+        assert ctx.resolve_field("sig1") == ctx.field_resolver.resolve_field("sig1")
+
+    def test_delegation_compute_parameter_stats(self):
+        """compute_parameter_stats 应委托给 stats_service。"""
+        ctx = DataContext()
+        result = ctx.compute_parameter_stats(0, 100, [])
+        assert result == ctx.stats_service.compute_parameter_stats(0, 100, [])
+
+    def test_unload_clears_composition_objects(self):
+        """unload 应清空 field_resolver 和 stats_service。"""
+        ctx = DataContext()
+        ctx.data = {"TIME": np.array([0.0]), "sig": np.array([1.0])}
+        ctx.field_resolver.update(ctx.data)
+        ctx.stats_service.update(ctx.data, None, True, ctx.field_resolver)
+        ctx.unload()
+        assert ctx.field_resolver._data == {}
+        assert ctx.field_resolver._label_cache is None
+        assert ctx.stats_service._data == {}
+        assert ctx.stats_service._is_loaded is False
+
+    def test_load_updates_composition_objects(self, tmp_path):
+        """加载文件应更新 field_resolver 和 stats_service。"""
+        f = tmp_path / "test_data.txt"
+        lines = ["TIME\tCol1\tCol2"]
+        for i in range(120):
+            lines.append(f"00:00:{i:02d}:000\t{i}.0\t{i * 2}.0")
+        f.write_text("\n".join(lines), encoding="utf-8")
+
+        ctx = DataContext()
+        ctx.load(str(f), "/nonexistent/labels.xlsx")
+        assert ctx.is_loaded
+        assert ctx.field_resolver._data is ctx.data
+        assert ctx.stats_service._data is ctx.data
+        assert ctx.stats_service._is_loaded is True
