@@ -474,11 +474,30 @@ class MainWindow(QMainWindow):
         self._load_thread.load_finished.connect(self._on_load_finished)
         self._load_thread.start()
 
+    def _reset_to_unloaded_state(self) -> None:
+        """安全重置 GUI 到未加载状态（数据加载失败后调用）。"""
+        try:
+            if self.data_context is not None:
+                self.data_context.unload()
+        except Exception:
+            logger.debug("卸载数据失败", exc_info=True)
+        self.data_context = None
+        self.plot_widget.clear_data_context()
+        self.param_tree.clear_params()
+        self.apply_btn.setEnabled(False)
+        self.reset_btn.setEnabled(False)
+        self.copy_btn.setEnabled(False)
+        self.master_combo.clear()
+        self.master_combo.setEnabled(False)
+        self.info_display.clear()
+        self.status_bar.showMessage("就绪")
+
     def _on_load_finished(self, ctx, msg: str):
         """数据加载完成回调。ctx 为 DataContext 对象或 None。"""
         if ctx is None:
             self.status_bar.showMessage("加载失败")
             QMessageBox.critical(self, "加载失败", msg)
+            self._reset_to_unloaded_state()
             self._load_thread = None
             return
 
@@ -486,6 +505,7 @@ class MainWindow(QMainWindow):
             self._on_data_ready(ctx)
         except Exception as e:
             logger.exception("数据加载完成后的界面刷新失败")
+            self._reset_to_unloaded_state()
             QMessageBox.critical(self, "加载失败", f"数据加载后界面刷新失败：\n{e}")
         finally:
             self._load_thread = None
@@ -628,7 +648,7 @@ class MainWindow(QMainWindow):
             settings = QSettings("FTPA", "FTPA")
             settings.setValue("splitter_sizes", self._splitter.sizes())
         except Exception:
-            pass
+            logger.debug("QSettings 保存失败", exc_info=True)
 
         # 停止数据加载线程
         thread = getattr(self, '_load_thread', None)
@@ -646,7 +666,7 @@ class MainWindow(QMainWindow):
             try:
                 self.data_context.unload()
             except Exception:
-                pass
+                logger.debug("数据卸载失败", exc_info=True)
             self.data_context = None
 
         # 显式清理 matplotlib canvas，避免 Qt 退出时释放顺序冲突
@@ -655,7 +675,7 @@ class MainWindow(QMainWindow):
             if hasattr(self.plot_widget, 'canvas'):
                 self.plot_widget.canvas.close()
         except Exception:
-            pass
+            logger.debug("Canvas 清理失败", exc_info=True)
 
         event.accept()
 

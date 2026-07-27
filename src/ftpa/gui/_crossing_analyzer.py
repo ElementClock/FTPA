@@ -293,7 +293,7 @@ class CrossingAnalyzer:
             try:
                 line.remove()
             except Exception:
-                pass
+                logger.debug("穿越线移除失败", exc_info=True)
         self.crossing_lines.clear()
 
     def _redraw_crossing_lines(self) -> None:
@@ -381,6 +381,7 @@ class CrossingAnalyzer:
                 xlim = ax.get_xlim()
                 t_start, t_end = float(xlim[0]), float(xlim[1])
             except Exception:
+                logger.warning("子图 %d xlim 获取失败，跳过 Y 轴调整", i, exc_info=True)
                 continue
 
             fields = w.subplot_fields.get(i, [])

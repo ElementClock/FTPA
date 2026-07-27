@@ -16,6 +16,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
@@ -31,6 +32,8 @@ from ..config import CONFIG
 
 if TYPE_CHECKING:
     from .panel_plot import PlotCanvasWidget
+
+logger = logging.getLogger(__name__)
 
 
 class PlotRenderer:
@@ -65,6 +68,7 @@ class PlotRenderer:
         try:
             xlim = w.axes[0].get_xlim() if w.axes else None
         except Exception:
+            logger.debug("xlim 获取失败，跳过降采样", exc_info=True)
             xlim = None
 
         if xlim is not None:

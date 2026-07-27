@@ -66,7 +66,7 @@ def read_data_file(filepath: str) -> pd.DataFrame:
             # TIME 列保持 str，其余列声明 float64 跳过类型推断
             dtype_map = {col: np.float64 for col in header if col != 'TIME'}
         except Exception:
-            pass  # 无法读取表头则使用默认推断
+            logger.debug("表头读取失败，使用默认类型推断", exc_info=True)
 
         try:
             if dtype_map is not None:

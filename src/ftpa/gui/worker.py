@@ -6,7 +6,12 @@
 
 from __future__ import annotations
 
+import logging
+
+import pandas as pd
 from PySide6.QtCore import QThread, Signal
+
+logger = logging.getLogger(__name__)
 
 
 class DataLoaderWorker(QThread):
@@ -34,5 +39,14 @@ class DataLoaderWorker(QThread):
                 self.load_finished.emit(ctx, "")
             else:
                 self.load_finished.emit(None, msg or f"加载失败: {self.data_path}")
+        except FileNotFoundError as e:
+            self.load_finished.emit(None, f"文件不存在: {e}")
+        except (pd.errors.ParserError, ValueError) as e:
+            self.load_finished.emit(None, f"文件格式错误，请检查文件内容: {e}")
+        except MemoryError:
+            self.load_finished.emit(None, "内存不足，文件过大，请关闭其他程序后重试")
+        except OSError as e:
+            self.load_finished.emit(None, f"文件读取失败: {e}")
         except Exception as e:
-            self.load_finished.emit(None, str(e))
+            logger.exception("数据加载未知错误")
+            self.load_finished.emit(None, f"加载失败: {e}")

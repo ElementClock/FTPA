@@ -340,7 +340,7 @@ class RegionController:
             try:
                 artist.set_visible(False)
             except Exception:
-                pass
+                logger.debug("框选 artist 设不可见失败", exc_info=True)
 
         # 第二重：从 axes 中移除
         for artist in all_artists:
