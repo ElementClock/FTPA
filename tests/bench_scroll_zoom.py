@@ -97,6 +97,39 @@ class TestScrollZoomPerformance:
         print(f"\n连续10次缩放 - 平均: {avg_ms:.3f}ms, 最大: {max_ms:.3f}ms")
 
 
+class TestUpdateStatsPerformance:
+    """update_stats 性能基准测试。"""
+
+    def test_update_stats_1m_points_under_10ms(self):
+        """1M 点数据下 update_stats 应在 10ms 内完成。"""
+        n = 1_000_000
+        time_sec = np.linspace(0, 1000, n)
+        sig_data = np.random.randn(n)
+
+        widget = MagicMock()
+        ax = MagicMock()
+        ax.get_xlim.return_value = (0.0, 500.0)  # 半量数据窗口
+        widget.axes = [ax]
+        widget.subplot_fields = {0: ["sig1"]}
+
+        ctx = MagicMock()
+        ctx.time_sec = time_sec
+        ctx.data = {"sig1": sig_data}
+        ctx.get_label = lambda f: f
+        widget.ctx = ctx
+
+        widget.canvas = MagicMock()
+
+        analyzer = CrossingAnalyzer(widget)
+
+        start = time.perf_counter()
+        analyzer.update_stats()
+        elapsed_ms = (time.perf_counter() - start) * 1000
+
+        assert elapsed_ms < 10.0, f"update_stats 耗时 {elapsed_ms:.2f}ms 超过 10ms 阈值"
+        print(f"\nupdate_stats (1M points, half window): {elapsed_ms:.3f}ms")
+
+
 class TestScrollZoomCoordination:
     """协同行为验证。"""
 
