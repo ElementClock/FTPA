@@ -37,6 +37,236 @@ DATA_DIRS = [
 ]
 
 
+class FieldResolver:
+    """字段名解析与标签映射。
+
+    职责：
+    - 枚举数据字段名
+    - 将字段名映射为中文标签（通过 LabelMap）
+    - 将中文标签/别名反解析为字段名
+    """
+
+    def __init__(self, data: dict, lm: LabelMap | None = None):
+        self._data = data
+        self._lm = lm
+        self._label_cache: dict[str, str] | None = None
+
+    def update(self, data: dict, lm: LabelMap | None = None) -> None:
+        """数据加载后更新引用并清除缓存。"""
+        self._data = data
+        self._lm = lm
+        self._label_cache = None
+
+    def clear(self) -> None:
+        """卸载时清空所有状态。"""
+        self._data = {}
+        self._lm = None
+        self._label_cache = None
+
+    def get_field_names(self) -> list[str]:
+        """所有字段名（不包括 TIME 和元数据键）。"""
+        if not self._data:
+            return []
+        _meta_keys = {"TIME", "filename", "_name_mapping"}
+        return [k for k in self._data if k not in _meta_keys]
+
+    def get_field_labels(self) -> dict[str, str]:
+        """字段名 -> 中文标签（惰性缓存）。"""
+        if self._label_cache is not None:
+            return self._label_cache
+        result: dict[str, str] = {}
+        for field in self.get_field_names():
+            if self._lm is not None:
+                try:
+                    result[field] = self._lm.get_label(field)
+                except Exception:
+                    result[field] = field
+            else:
+                result[field] = field
+        self._label_cache = result
+        return result
+
+    def get_label(self, field_name: str) -> str:
+        """获取单个字段的中文标签。"""
+        return self.get_field_labels().get(field_name, field_name)
+
+    def resolve_field(self, signal_id: str) -> str | None:
+        """将中文标签或字段名解析为 data 中的字段名。"""
+        if signal_id in self._data:
+            return signal_id
+        if self._lm is not None:
+            f = self._lm.get_var_name(signal_id)
+            if f and f in self._data:
+                return f
+        cf = column_to_field_name(signal_id)
+        if cf != signal_id and cf in self._data:
+            return cf
+        return None
+
+
+class StatisticsService:
+    """统计计算服务。
+
+    职责：
+    - 参数统计（compute_parameter_stats）
+    - 穿越分析（compute_crossing_analysis）
+    - 起降统计（compute_takeoff_landing_stats）
+    """
+
+    def __init__(self, data: dict, lm: LabelMap | None = None,
+                 is_loaded: bool = False, field_resolver: FieldResolver | None = None):
+        self._data = data
+        self._lm = lm
+        self._is_loaded = is_loaded
+        self._field_resolver = field_resolver
+
+    def update(self, data: dict, lm: LabelMap | None = None,
+               is_loaded: bool = False, field_resolver: FieldResolver | None = None) -> None:
+        """数据加载后更新引用。"""
+        self._data = data
+        self._lm = lm
+        self._is_loaded = is_loaded
+        self._field_resolver = field_resolver
+
+    def clear(self) -> None:
+        """卸载时清空所有状态。"""
+        self._data = {}
+        self._lm = None
+        self._is_loaded = False
+        self._field_resolver = None
+
+    def compute_parameter_stats(self, t_start, t_end, signal_ids: list[str]) -> list[str]:
+        if not self._is_loaded:
+            return ["数据未加载"]
+        if self._lm is None:
+            return self._stats_without_labelmap(t_start, t_end, signal_ids)
+        return statistics_params(t_start, t_end, self._data, self._lm, signal_ids)
+
+    def compute_crossing_analysis(
+        self, signal_ids: list[str], mode: str, threshold: float, t_start, t_end
+    ) -> list[str]:
+        if not self._is_loaded:
+            return ["数据未加载"]
+        if self._lm is None:
+            return self._crossing_without_labelmap(signal_ids, mode, threshold, t_start, t_end)
+        return crossing_analysis(self._data, self._lm, signal_ids, mode, threshold, t_start, t_end)
+
+    def compute_takeoff_landing_stats(self, t_start, t_end) -> str:
+        if not self._is_loaded:
+            return "数据未加载"
+        if self._lm is None:
+            return "CSV 模式不支持起降统计（需要映射表定位关键参数）"
+        return compute_takeoff_landing_stats(t_start, t_end, self._data, self._lm)
+
+    def _stats_without_labelmap(self, t_start, t_end, signal_ids: list[str] | None) -> list[str]:
+        """CSV 模式参数统计：列名即为标签，无需 LabelMap。"""
+        from ..time_utils import select_time_window
+        from ..statistics.basic import compute_stat
+
+        if 'TIME' not in self._data:
+            return ['数据中无 TIME 字段']
+
+        TIME = self._data['TIME']
+        i_start, i_end, t_start_actual, t_end_actual = select_time_window(TIME, t_start, t_end)
+        lines = []
+
+        # 确定要处理的字段
+        if not signal_ids:
+            fields_to_process = self._field_resolver.get_field_names() if self._field_resolver else []
+        else:
+            fields_to_process = [s for s in signal_ids if s in self._data]
+
+        if not fields_to_process:
+            return ['未找到可统计的变量。']
+
+        for field_name in fields_to_process:
+            signal = self._data[field_name]
+            if not isinstance(signal, np.ndarray) or len(signal) != len(TIME):
+                continue
+            if not np.issubdtype(signal.dtype, np.number) and signal.dtype != bool:
+                continue
+
+            segment = signal[i_start:i_end + 1]
+            label = field_name  # CSV 列名即为标签
+
+            if len(segment) == 0:
+                lines.append(f'{label}: 窗口内无数据')
+                continue
+
+            stat_types = ['start', 'end', 'min', 'max', 'mean', 'std', 'points']
+            values = []
+            for st in stat_types:
+                val, _ = compute_stat(segment, st)
+                values.append(f'{val:.6g}' if isinstance(val, (int, float, np.number)) else str(val))
+
+            line = (f'{label}  起始={values[0]}, 结束={values[1]}, 最小={values[2]}, '
+                    f'最大={values[3]}, 平均={values[4]}, 标准差={values[5]}, 点数={values[6]}')
+            lines.append(line)
+
+        if not lines:
+            lines.append('未找到可统计的变量。')
+        return lines
+
+    def _crossing_without_labelmap(
+        self, signal_ids: list[str], mode: str, threshold: float, t_start, t_end
+    ) -> list[str]:
+        """CSV 模式穿越分析：列名即为标签，无需 LabelMap。"""
+        from ..time_utils import select_time_window
+        from ..statistics.basic import find_crossing_points
+
+        if not signal_ids:
+            return ['signal_ids 不能为空']
+
+        TIME = self._data.get('TIME')
+        if TIME is None:
+            return ['数据中无 TIME 字段']
+
+        i_start, i_end, _, _ = select_time_window(TIME, t_start, t_end)
+
+        fields = [s if s in self._data else '' for s in signal_ids]
+        labels = signal_ids  # CSV 列名即为标签
+
+        main_field = fields[0]
+        main_label = labels[0]
+
+        if not main_field:
+            return [f'主信号 "{signal_ids[0]}" 未找到']
+
+        main_sig = self._data[main_field]
+        if len(main_sig) != len(TIME):
+            return [f'主信号 "{main_label}" 与时间向量长度不一致']
+
+        main_sig = main_sig[i_start:i_end + 1]
+        cross_idx_local = find_crossing_points(main_sig, threshold, mode)
+
+        if cross_idx_local is None:
+            return [f'在窗口内未检测到 {main_label} 的 {mode} 穿越（阈值 {threshold:.2f}）']
+
+        mode_text = mode.replace('First', '首次').replace('Last', '末次')
+        mode_text = mode_text.replace('Down', '下降').replace('Up', '上升')
+
+        lines = [f'{main_label} {mode_text}穿越阈值 {threshold:.2f} 时：']
+
+        for i in range(1, len(signal_ids)):
+            other_field = fields[i]
+            display_name = labels[i]
+
+            if not other_field or other_field not in self._data:
+                lines.append(f'    {signal_ids[i]} = (无数据)')
+                continue
+
+            other_sig = self._data[other_field]
+            if len(other_sig) != len(TIME):
+                lines.append(f'    {display_name} = (长度不一致)')
+                continue
+
+            val = other_sig[i_start:i_end + 1]
+            cross_idx = cross_idx_local - 1
+            lines.append(f'    {display_name} = {val[cross_idx]:.2f}')
+
+        return lines
+
+
 class DataContext:
     """统一数据上下文，持有加载的数据和标签映射。"""
 
@@ -48,10 +278,12 @@ class DataContext:
         self.time_vec: np.ndarray | None = None
         self.time_sec: np.ndarray | None = None
         self._loaded = False
-        self._label_cache: dict[str, str] | None = None
         # 数据源类型与系统级分析
         self.source_type: str = ""       # "txt" | "csv"
         self.analysis_result: dict = {}  # 系统级分析结果（engine/fuel/power/cas）
+        # 组合对象
+        self.field_resolver = FieldResolver(self.data)
+        self.stats_service = StatisticsService(self.data)
 
     @staticmethod
     def resolve_path(path_value: str | os.PathLike[str] | None, default: str = "") -> str:
@@ -104,9 +336,10 @@ class DataContext:
                 self.lm = None
 
             # 重置缓存
-            self._label_cache = None
             self.analysis_result = {}
 
+            self.field_resolver.update(self.data, self.lm)
+            self.stats_service.update(self.data, self.lm, True, self.field_resolver)
             self._loaded = True
             return True, ""
         except Exception as e:
@@ -139,9 +372,10 @@ class DataContext:
             self.lm = None
 
             # 重置缓存
-            self._label_cache = None
             self.analysis_result = {}
 
+            self.field_resolver.update(self.data, self.lm)
+            self.stats_service.update(self.data, self.lm, True, self.field_resolver)
             self._loaded = True
             return True, ""
         except Exception as e:
@@ -159,7 +393,8 @@ class DataContext:
         self.lm = None
         self.time_vec = None
         self.time_sec = None
-        self._label_cache = None
+        self.field_resolver.clear()
+        self.stats_service.clear()
         self._loaded = False
         self.source_type = ""
         self.analysis_result = {}
@@ -172,29 +407,14 @@ class DataContext:
 
     def get_field_names(self) -> list[str]:
         """所有字段名（不包括 TIME 和元数据键）。"""
-        if not self.data:
-            return []
-        _meta_keys = {"TIME", "filename", "_name_mapping"}
-        return [k for k in self.data if k not in _meta_keys]
+        return self.field_resolver.get_field_names()
 
     def get_field_labels(self) -> dict[str, str]:
         """字段名 → 中文标签（惰性缓存）。"""
-        if self._label_cache is not None:
-            return self._label_cache
-        result: dict[str, str] = {}
-        for field in self.get_field_names():
-            if self.lm is not None:
-                try:
-                    result[field] = self.lm.get_label(field)
-                except Exception:
-                    result[field] = field
-            else:
-                result[field] = field
-        self._label_cache = result
-        return result
+        return self.field_resolver.get_field_labels()
 
     def get_label(self, field_name: str) -> str:
-        return self.get_field_labels().get(field_name, field_name)
+        return self.field_resolver.get_label(field_name)
 
     def resolve_field(self, signal_id: str) -> str | None:
         """将中文标签或字段名解析为 data 中的字段名。
@@ -204,16 +424,7 @@ class DataContext:
         2. 通过 LabelMap 反查
         3. column_to_field_name 转换后匹配（仅对 ASCII 列名有效）
         """
-        if signal_id in self.data:
-            return signal_id
-        if self.lm is not None:
-            f = self.lm.get_var_name(signal_id)
-            if f and f in self.data:
-                return f
-        cf = column_to_field_name(signal_id)
-        if cf != signal_id and cf in self.data:
-            return cf
-        return None
+        return self.field_resolver.resolve_field(signal_id)
 
     # -- 绘图数据 --
 
@@ -258,28 +469,15 @@ class DataContext:
     # -- 统计 --
 
     def compute_parameter_stats(self, t_start, t_end, signal_ids: list[str]) -> list[str]:
-        if not self._loaded:
-            return ["数据未加载"]
-        if self.lm is None:
-            # CSV 模式：无映射表，直接用列名作为标签
-            return self._stats_without_labelmap(t_start, t_end, signal_ids)
-        return statistics_params(t_start, t_end, self.data, self.lm, signal_ids)
+        return self.stats_service.compute_parameter_stats(t_start, t_end, signal_ids)
 
     def compute_crossing_analysis(
         self, signal_ids: list[str], mode: str, threshold: float, t_start, t_end
     ) -> list[str]:
-        if not self._loaded:
-            return ["数据未加载"]
-        if self.lm is None:
-            return self._crossing_without_labelmap(signal_ids, mode, threshold, t_start, t_end)
-        return crossing_analysis(self.data, self.lm, signal_ids, mode, threshold, t_start, t_end)
+        return self.stats_service.compute_crossing_analysis(signal_ids, mode, threshold, t_start, t_end)
 
     def compute_takeoff_landing_stats(self, t_start, t_end) -> str:
-        if not self._loaded:
-            return "数据未加载"
-        if self.lm is None:
-            return "CSV 模式不支持起降统计（需要映射表定位关键参数）"
-        return compute_takeoff_landing_stats(t_start, t_end, self.data, self.lm)
+        return self.stats_service.compute_takeoff_landing_stats(t_start, t_end)
 
     # -- 拟合 --
 
@@ -287,116 +485,6 @@ class DataContext:
         if not self._loaded or self.time_vec is None:
             return float("nan")
         return compute_fitted_circle_radius(self.time_vec, t_start, t_end, self.data[lat_field], self.data[lon_field])
-
-    # -- 无映射表统计（CSV 模式） --
-
-    def _stats_without_labelmap(self, t_start, t_end, signal_ids: list[str] | None) -> list[str]:
-        """CSV 模式参数统计：列名即为标签，无需 LabelMap。"""
-        from ..time_utils import select_time_window
-        from ..statistics.basic import compute_stat
-
-        if 'TIME' not in self.data:
-            return ['数据中无 TIME 字段']
-
-        TIME = self.data['TIME']
-        i_start, i_end, t_start_actual, t_end_actual = select_time_window(TIME, t_start, t_end)
-        lines = []
-
-        # 确定要处理的字段
-        if not signal_ids:
-            fields_to_process = self.get_field_names()
-        else:
-            fields_to_process = [s for s in signal_ids if s in self.data]
-
-        if not fields_to_process:
-            return ['未找到可统计的变量。']
-
-        for field_name in fields_to_process:
-            signal = self.data[field_name]
-            if not isinstance(signal, np.ndarray) or len(signal) != len(TIME):
-                continue
-            if not np.issubdtype(signal.dtype, np.number) and signal.dtype != bool:
-                continue
-
-            segment = signal[i_start:i_end + 1]
-            label = field_name  # CSV 列名即为标签
-
-            if len(segment) == 0:
-                lines.append(f'{label}: 窗口内无数据')
-                continue
-
-            stat_types = ['start', 'end', 'min', 'max', 'mean', 'std', 'points']
-            values = []
-            for st in stat_types:
-                val, _ = compute_stat(segment, st)
-                values.append(f'{val:.6g}' if isinstance(val, (int, float, np.number)) else str(val))
-
-            line = (f'{label}  起始={values[0]}, 结束={values[1]}, 最小={values[2]}, '
-                    f'最大={values[3]}, 平均={values[4]}, 标准差={values[5]}, 点数={values[6]}')
-            lines.append(line)
-
-        if not lines:
-            lines.append('未找到可统计的变量。')
-        return lines
-
-    def _crossing_without_labelmap(
-        self, signal_ids: list[str], mode: str, threshold: float, t_start, t_end
-    ) -> list[str]:
-        """CSV 模式穿越分析：列名即为标签，无需 LabelMap。"""
-        from ..time_utils import select_time_window
-        from ..statistics.basic import find_crossing_points
-
-        if not signal_ids:
-            return ['signal_ids 不能为空']
-
-        TIME = self.data.get('TIME')
-        if TIME is None:
-            return ['数据中无 TIME 字段']
-
-        i_start, i_end, _, _ = select_time_window(TIME, t_start, t_end)
-
-        fields = [s if s in self.data else '' for s in signal_ids]
-        labels = signal_ids  # CSV 列名即为标签
-
-        main_field = fields[0]
-        main_label = labels[0]
-
-        if not main_field:
-            return [f'主信号 "{signal_ids[0]}" 未找到']
-
-        main_sig = self.data[main_field]
-        if len(main_sig) != len(TIME):
-            return [f'主信号 "{main_label}" 与时间向量长度不一致']
-
-        main_sig = main_sig[i_start:i_end + 1]
-        cross_idx_local = find_crossing_points(main_sig, threshold, mode)
-
-        if cross_idx_local is None:
-            return [f'在窗口内未检测到 {main_label} 的 {mode} 穿越（阈值 {threshold:.2f}）']
-
-        mode_text = mode.replace('First', '首次').replace('Last', '末次')
-        mode_text = mode_text.replace('Down', '下降').replace('Up', '上升')
-
-        lines = [f'{main_label} {mode_text}穿越阈值 {threshold:.2f} 时：']
-
-        for i in range(1, len(signal_ids)):
-            other_field = fields[i]
-            display_name = labels[i]
-
-            if not other_field or other_field not in self.data:
-                lines.append(f'    {signal_ids[i]} = (无数据)')
-                continue
-
-            other_sig = self.data[other_field]
-            if len(other_sig) != len(TIME):
-                lines.append(f'    {display_name} = (长度不一致)')
-                continue
-
-            val = other_sig[i_start:i_end + 1]
-            cross_idx = cross_idx_local - 1
-            lines.append(f'    {display_name} = {val[cross_idx]:.2f}')
-
-        return lines
 
     # -- 导出 --
 
