@@ -345,15 +345,33 @@ class PlotRenderer:
     # ── 右键菜单 ──
 
     def show_context_menu(self, event) -> None:
-        """显示子图右键菜单：布局切换 + 删除信号、清空子图。
+        """显示子图右键菜单：布局切换 + 删除信号、清空子图 + 区域筛选。
 
         布局子菜单始终显示；信号管理选项在右键点击子图时显示。
+        区域筛选选项在有框选区域时显示。
         - "删除信号"：仅子图有信号时显示
         - "清空该子图"：始终显示，无信号时灰显
         """
         w = self.w
         ctx = w.ctx
         menu = QMenu(w)
+
+        # ── 区域筛选（框选区域存在时显示）──
+        if w._region.is_selected():
+            region = w._region.get_region()
+            if region is not None:
+                from ..time_utils import format_time_seconds
+                t_start, t_end = region
+                region_label = (f"应用区域筛选 ({format_time_seconds(t_start)} → "
+                                f"{format_time_seconds(t_end)})")
+                act_apply_region = QAction(region_label, w)
+                act_apply_region.triggered.connect(lambda: w._region.apply_selection())
+                menu.addAction(act_apply_region)
+
+            act_cancel_region = QAction("取消区域筛选", w)
+            act_cancel_region.triggered.connect(lambda: w._region.cancel_selection())
+            menu.addAction(act_cancel_region)
+            menu.addSeparator()
 
         # ── 布局子菜单（始终显示）──
         layout_menu = menu.addMenu("布局")

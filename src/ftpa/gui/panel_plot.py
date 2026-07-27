@@ -45,6 +45,7 @@ from ._layout_ctrl import LayoutController
 from ._plot_renderer import PlotRenderer
 from ._crossing_analyzer import CrossingAnalyzer
 from ._pan_ctrl import PanController
+from ._region_ctrl import RegionController
 
 # 确保使用 Qt 后端（仅在 matplotlib 尚未初始化后端时设置）
 if matplotlib.get_backend() == "_agg":
@@ -54,11 +55,12 @@ if matplotlib.get_backend() == "_agg":
 class PlotCanvasWidget(QWidget):
     """交互绘图画布面板 — 动态子图布局。
 
-    外部 API 保持不变，内部委托给四个控制器：
+    外部 API 保持不变，内部委托给五个控制器：
     - _layout: LayoutController — 布局模式 + 子图选择
     - _renderer: PlotRenderer — 数据绘制 + 信号管理
     - _crossing: CrossingAnalyzer — 穿越分析 + 统计更新
     - _pan: PanController — 拖拽水平平移
+    - _region: RegionController — 右键拖动框选时间区间
     """
 
     # 子图选中信号（发送子图索引，0-based）
@@ -97,6 +99,7 @@ class PlotCanvasWidget(QWidget):
         self._renderer = PlotRenderer(self)
         self._crossing = CrossingAnalyzer(self)
         self._pan = PanController(self)
+        self._region = RegionController(self)
 
         # 构建 UI
         self._build_ui()
@@ -137,25 +140,29 @@ class PlotCanvasWidget(QWidget):
     # ── 事件分发 ──
 
     def _on_button_press(self, event) -> None:
-        """鼠标按下：PanController 记录起始位置 + 右键菜单即时响应。"""
-        # 右键中断左键平移
-        if event.button == 3 and self._pan.is_panning():
-            self._pan.reset()
-        self._pan.on_press(event)
-        # 右键菜单在 press 时即触发（不等待 release）
+        """鼠标按下：PanController 记录起始位置 + RegionController 记录右键起点。
+
+        右键行为：
+          - press 时交给 RegionController 记录起点（不立即触发菜单）
+          - 菜单触发推迟到 release，由 RegionController 判断是单击还是拖动
+        """
         if event.button == 3:
-            # 记录右键点击的子图索引（None 表示空白区域）
-            self._right_clicked_axes_idx = None
-            if event.inaxes is not None:
-                for i, ax in enumerate(self.axes):
-                    if ax == event.inaxes:
-                        self._right_clicked_axes_idx = i
-                        break
-            self._renderer.show_context_menu(event)
+            # 右键中断左键平移
+            if self._pan.is_panning():
+                self._pan.reset()
+            # 交给 RegionController 记录起点
+            self._region.on_press(event)
+        # 左键交给 PanController
+        self._pan.on_press(event)
 
     def _on_motion(self, event) -> None:
-        """鼠标移动：PanController 处理拖拽平移 + 光标样式更新。"""
-        # 先处理拖拽平移
+        """鼠标移动：RegionController 处理框选拖动 / PanController 处理平移 + 光标样式更新。"""
+        # 右键框选优先：PRESSED（判断阈值）或 SELECTING（实时绘制）状态都交给 RegionController
+        if self._region.get_state() in (RegionController.PRESSED, RegionController.SELECTING):
+            self._region.on_motion(event)
+            return
+
+        # 然后处理拖拽平移
         self._pan.on_motion(event)
 
         # 光标样式：仅在非拖拽状态下且样式实际变化时更新
@@ -168,7 +175,24 @@ class PlotCanvasWidget(QWidget):
                 self.canvas.setCursor(want_cursor)
 
     def _on_button_release(self, event) -> None:
-        """鼠标释放：PanController 处理平移完成，非平移则交由 LayoutController。"""
+        """鼠标释放：右键由 RegionController 判断拖动/单击；左键由 PanController 处理。"""
+        if event.button == 3:
+            # 右键释放 → RegionController 判断是拖动（框选）还是单击（菜单）
+            was_region_drag = self._region.on_release(event)
+            if was_region_drag:
+                # 右键拖动完成 → 框选区域已建立，不触发菜单
+                return
+            # 右键单击 → 触发上下文菜单（与原有行为一致）
+            self._right_clicked_axes_idx = None
+            if event.inaxes is not None:
+                for i, ax in enumerate(self.axes):
+                    if ax == event.inaxes:
+                        self._right_clicked_axes_idx = i
+                        break
+            self._renderer.show_context_menu(event)
+            return
+
+        # 左键释放：PanController 处理平移完成
         self._pan.on_release(event)
         if self._pan.was_panning():
             # 平移完成后刷新 Line2D 数据 + Y轴自适应 + 统计更新
@@ -179,15 +203,17 @@ class PlotCanvasWidget(QWidget):
             self._layout.on_canvas_click(event)
 
     def _on_scroll(self, event) -> None:
-        """滚轮事件：平移中忽略，否则执行时间轴缩放。
+        """滚轮事件：缩放时清除框选覆盖层，然后执行时间轴缩放。
 
         路由:
           1. 平移中 → 忽略（避免事件冲突）
-          2. 调用 _crossing.on_scroll_zoom 执行缩放
-          3. on_scroll_zoom 内部触发 on_canvas_zoom 完成防抖Y轴自适应
+          2. 清除框选覆盖层（缩放后时间范围已变化，框选不再有意义）
+          3. 调用 _crossing.on_scroll_zoom 执行缩放
         """
         if self._pan.is_panning():
             return
+        # 缩放操作清除框选覆盖层
+        self._region.cancel_selection()
         self._crossing.on_scroll_zoom(event)
 
     # ── 外部 API（委托到控制器）──
@@ -203,6 +229,7 @@ class PlotCanvasWidget(QWidget):
     def set_layout_mode(self, mode: str):
         """供菜单/外部调用切换布局。"""
         self._pan.reset()
+        self._region.reset()
         self._layout.switch_layout(mode)
 
     def add_to_subplot(self, field_name: str):
@@ -224,11 +251,13 @@ class PlotCanvasWidget(QWidget):
 
     def apply_crossing(self, left_val: float, left_mode: str,
                        right_val: float, right_mode: str, master_field: str):
-        """应用穿越 — 缩放到左右穿越点之间的时间区间。"""
+        """应用穿越 — 缩放到左右穿越点之间的时间区间 — 同时清除框选覆盖层。"""
+        self._region.cancel_selection()
         self._crossing.apply_crossing(left_val, left_mode, right_val, right_mode, master_field)
 
     def reset_zoom(self):
-        """重置时间范围到数据起止（保留穿越线）。"""
+        """重置时间范围到数据起止（保留穿越线）— 同时清除框选覆盖层。"""
+        self._region.cancel_selection()
         self._crossing.reset_zoom()
 
     def get_stats_text(self) -> str:
@@ -238,11 +267,13 @@ class PlotCanvasWidget(QWidget):
     def set_data_context(self, ctx: DataContext):
         """设置数据上下文。"""
         self._pan.reset()
+        self._region.reset()
         self._renderer.set_data_context(ctx)
 
     def clear_data_context(self) -> None:
         """清除数据上下文，清空所有子图和统计。"""
         self._pan.reset()
+        self._region.reset()
         self._renderer.set_data_context(None)
         self.subplot_fields = {i: [] for i in range(len(self.axes))}
 

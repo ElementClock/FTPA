@@ -85,6 +85,8 @@ class CrossingAnalyzer:
         3. 左/右穿越点未找到时回退到窗口边界
         4. 缩放所有子图 X 轴至 [left_x, right_x]
         5. 自动调整每个子图 Y 轴适配可见数据
+
+        委托给 _do_crossing_search() 执行核心逻辑。
         """
         w = self.w
         self.left_val = left_val
@@ -97,14 +99,7 @@ class CrossingAnalyzer:
         if ctx is None or ctx.time_sec is None:
             return
 
-        if not master_field:
-            return
-
-        master_data = ctx.data.get(master_field)
-        if master_data is None:
-            return
-
-        # ── 步骤 1: 获取当前视图范围作为搜索窗口 ──
+        # 获取当前视图范围作为搜索窗口
         if not w.axes:
             return
         try:
@@ -114,7 +109,67 @@ class CrossingAnalyzer:
         except Exception:
             t_start_sec, t_end_sec = ctx.get_time_range_sec()
 
-        # ── 步骤 2: 在窗口内搜索穿越点（排除 NaN） ──
+        self._do_crossing_search(t_start_sec, t_end_sec)
+
+    def apply_crossing_in_region(self, t_start: float, t_end: float) -> bool:
+        """在指定时间区间内执行穿越检测并缩放。
+
+        与 apply_crossing() 的区别：
+        - 搜索窗口由参数指定（而非当前视图 xlim）
+        - 返回 bool 表示是否成功找到穿越点
+        - 穿越点未找到时直接返回 False（不回退到窗口边界）
+
+        Args:
+            t_start: 搜索窗口起始时间（秒）
+            t_end: 搜索窗口结束时间（秒）
+
+        Returns:
+            True — 找到穿越点并成功缩放
+            False — 未找到有效穿越点
+        """
+        w = self.w
+        ctx = w.ctx
+        if ctx is None or ctx.time_sec is None:
+            return False
+
+        return self._do_crossing_search(t_start, t_end, allow_fallback=False)
+
+    def _do_crossing_search(self, t_start_sec: float, t_end_sec: float,
+                            *, allow_fallback: bool = True) -> bool:
+        """核心穿越检测逻辑 — 在指定时间窗口内搜索穿越点并缩放。
+
+        提取自 apply_crossing()，供 apply_crossing() 和 apply_crossing_in_region() 复用。
+
+        Args:
+            t_start_sec: 搜索窗口起始时间（秒）
+            t_end_sec: 搜索窗口结束时间（秒）
+            allow_fallback: 穿越点未找到时是否回退到窗口边界。
+                           apply_crossing() 使用 True（原有行为），
+                           apply_crossing_in_region() 使用 False（失败即返回）。
+
+        Returns:
+            True — 找到穿越点并成功缩放
+            False — 未找到有效穿越点或参数不足
+        """
+        w = self.w
+        ctx = w.ctx
+        if ctx is None or ctx.time_sec is None:
+            return False
+
+        if not self.master_field:
+            return False
+
+        master_data = ctx.data.get(self.master_field)
+        if master_data is None:
+            return False
+
+        if not w.axes:
+            return False
+
+        # 任何缩放操作都应清除框选覆盖层（缩放后时间范围已变化）
+        w._region.cancel_selection()
+
+        # ── 在窗口内搜索穿越点（排除 NaN） ──
         time_sec = ctx.time_sec
         master_arr = np.asarray(master_data, dtype=float)
 
@@ -129,15 +184,15 @@ class CrossingAnalyzer:
         sub_sig = sub_sig[valid]
 
         if len(sub_sig) < 2:
-            w.log_message.emit("当前视图内有效数据点不足，无法检测穿越")
-            return
+            w.log_message.emit("框选区域内有效数据点不足，无法检测穿越")
+            return False
 
         # 检测穿越点
         left_x: float | None = None
         right_x: float | None = None
 
-        for side, (val, mode) in [("left", (left_val, left_mode)),
-                                   ("right", (right_val, right_mode))]:
+        for side, (val, mode) in [("left", (self.left_val, self.left_mode)),
+                                   ("right", (self.right_val, self.right_mode))]:
             pos = find_crossing_points(sub_sig, val, mode)
             if pos is not None:
                 t_point = float(sub_time[pos - 1])
@@ -146,20 +201,34 @@ class CrossingAnalyzer:
                 else:
                     right_x = t_point
 
-        # ── 步骤 3: 穿越点未找到时回退到窗口边界 ──
-        if left_x is None:
-            left_x = t_start_sec
-            w.log_message.emit("未找到左边界穿越点，使用当前视图起点")
-        if right_x is None:
-            right_x = t_end_sec
-            w.log_message.emit("未找到右边界穿越点，使用当前视图终点")
+        # 穿越点未找到时的处理
+        if left_x is None or right_x is None:
+            if allow_fallback:
+                # 原有行为：回退到窗口边界
+                if left_x is None:
+                    left_x = t_start_sec
+                    w.log_message.emit("未找到左边界穿越点，使用窗口起点")
+                if right_x is None:
+                    right_x = t_end_sec
+                    w.log_message.emit("未找到右边界穿越点，使用窗口终点")
+            else:
+                # 区域筛选模式：穿越点未找到即失败，不缩放
+                missing = []
+                if left_x is None:
+                    missing.append("左边界")
+                if right_x is None:
+                    missing.append("右边界")
+                w.log_message.emit(
+                    f"框选区域内未找到{'、'.join(missing)}穿越点，请调整阈值或方向"
+                )
+                return False
 
-        # ── 步骤 4: 验证并缩放 ──
+        # 验证并缩放
         if left_x >= right_x:
             w.log_message.emit(
                 f"左边界 ({format_time_seconds(left_x)}) 不早于右边界 ({format_time_seconds(right_x)})，请检查阈值或方向"
             )
-            return
+            return False
 
         # 绘制穿越线（基于窗口内的穿越点）
         self._crossing_x = {"left": left_x, "right": right_x}
@@ -169,11 +238,12 @@ class CrossingAnalyzer:
         for ax in w.axes:
             ax.set_xlim(left_x, right_x)
 
-        # ── 步骤 5: 自动调整每个子图 Y 轴 ──
+        # 自动调整每个子图 Y 轴
         self._adjust_y_limits()
 
         w.canvas.draw_idle()
         self.update_stats()
+        return True
 
     def reset_zoom(self) -> None:
         """重置时间范围到初始状态（保留穿越线）。

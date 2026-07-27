@@ -354,7 +354,11 @@ class MainWindow(QMainWindow):
     # ── 穿越控制 ──
 
     def _on_apply_crossing(self):
-        """应用穿越分析。"""
+        """应用穿越分析。
+
+        当有框选区域时，在框选区间内执行穿越检测；
+        否则使用当前视图范围（原有行为）。
+        """
         left_val = float(self.left_threshold.text() or 0)
         left_mode = self.left_mode.currentText()
         right_val = float(self.right_threshold.text() or 0)
@@ -365,12 +369,29 @@ class MainWindow(QMainWindow):
         if not master:
             self._append_log("请先选择主穿越信号")
             return
-        self.plot_widget.apply_crossing(left_val, left_mode, right_val, right_mode, master)
-        # 更新信息显示框
-        stats = self.plot_widget.get_stats_text()
-        if stats:
-            self.info_display.setPlainText(stats)
-        self._append_log(f"穿越分析: 主信号={master}")
+
+        # 检测是否有框选区域
+        region = self.plot_widget._region.get_region() if self.plot_widget._region.is_selected() else None
+
+        if region is not None:
+            # 有框选区域 → 设置穿越参数后在框选区间内执行穿越检测
+            self.plot_widget.set_crossing_context(left_val, left_mode, right_val, right_mode, master)
+            success = self.plot_widget._region.apply_selection()
+            if success:
+                # 更新信息显示框
+                stats = self.plot_widget.get_stats_text()
+                if stats:
+                    self.info_display.setPlainText(stats)
+                self._append_log(f"区域穿越分析: 主信号={master}")
+            # 失败时 apply_selection 已发送日志
+        else:
+            # 无框选区域 → 使用当前视图范围（原有行为）
+            self.plot_widget.apply_crossing(left_val, left_mode, right_val, right_mode, master)
+            # 更新信息显示框
+            stats = self.plot_widget.get_stats_text()
+            if stats:
+                self.info_display.setPlainText(stats)
+            self._append_log(f"穿越分析: 主信号={master}")
 
     def _on_reset_zoom(self):
         """重置缩放。"""
