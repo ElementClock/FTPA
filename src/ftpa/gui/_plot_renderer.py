@@ -121,24 +121,7 @@ class PlotRenderer:
 
         仅用于 switch_layout 中的全量绘制（布局切换时 axes 被重建）。
         """
-        w = self.w
-        fields = w.subplot_fields.get(idx, [])
-        if fields:
-            for f in fields:
-                render_data = self._get_render_data(f)
-                if render_data is not None:
-                    t, d = render_data
-                    line = ax.plot(t, d, linewidth=CONFIG.plot.line_width, label=w.ctx.get_label(f))[0]
-                    self._line_cache[(idx, f)] = line
-                    crossing_fields.add(f)
-            if len(fields) > 1:
-                ax.legend(fontsize=CONFIG.plot.legend_fontsize)
-            ax.set_ylabel(w.ctx.get_label(fields[0]) if len(fields) == 1 else f"子图{idx + 1}")
-        else:
-            txt = ax.text(0.5, 0.5, f"子图 {idx + 1}（空）\n点击选中后添加参数",
-                         ha="center", va="center", transform=ax.transAxes,
-                         fontsize=CONFIG.plot.empty_text_fontsize, alpha=CONFIG.plot.empty_text_alpha)
-            self._empty_text_cache[idx] = txt
+        self._render_subplot_from_scratch(ax, idx, crossing_fields)
 
     def rebuild_plot(self, layout_changed: bool = False) -> None:
         """重新绘制所有子图的信号内容。
@@ -199,16 +182,12 @@ class PlotRenderer:
                     line.set_ydata(d)
                 else:
                     # 新建 Line2D
-                    line = ax.plot(t, d, linewidth=CONFIG.plot.line_width, label=w.ctx.get_label(f))[0]
-                    self._line_cache[key] = line
+                    self._create_line_for_field(ax, i, f, crossing_fields)
 
             # 4. 处理空子图文本标注
             if not fields:
                 if i not in self._empty_text_cache:
-                    txt = ax.text(0.5, 0.5, f"子图 {i + 1}（空）\n点击选中后添加参数",
-                                  ha="center", va="center", transform=ax.transAxes,
-                                  fontsize=CONFIG.plot.empty_text_fontsize, alpha=CONFIG.plot.empty_text_alpha)
-                    self._empty_text_cache[i] = txt
+                    self._create_empty_text(ax, i)
             else:
                 txt = self._empty_text_cache.pop(i, None)
                 if txt is not None:
@@ -217,23 +196,9 @@ class PlotRenderer:
                     except ValueError:
                         pass
 
-            # 5. 处理 legend：仅在信号集合变化时重建
-            need_legend = len(fields) > 1
-            old_legend = ax.get_legend()
-            if old_legend is not None and not need_legend:
-                old_legend.remove()
-            elif need_legend:
-                if old_legend is not None:
-                    old_legend.remove()
-                # 重建 legend 以反映当前 label
-                ax.legend(fontsize=CONFIG.plot.legend_fontsize)
-
-            # 6. 处理 ylabel
-            if fields:
-                ylabel = w.ctx.get_label(fields[0]) if len(fields) == 1 else f"子图{i + 1}"
-            else:
-                ylabel = ""
-            ax.set_ylabel(ylabel)
+            # 5. Legend + ylabel
+            self._apply_legend(ax, fields, incremental=True)
+            ax.set_ylabel(self._compute_ylabel(fields, i))
 
         # 7. 通用装饰
         self._apply_axis_decorations()
@@ -261,24 +226,7 @@ class PlotRenderer:
         for i, ax in enumerate(w.axes):
             ax.clear()
             ax.grid(True, alpha=0.3)
-
-            fields = w.subplot_fields.get(i, [])
-            if fields:
-                for f in fields:
-                    render_data = self._get_render_data(f)
-                    if render_data is not None:
-                        t, d = render_data
-                        line = ax.plot(t, d, linewidth=CONFIG.plot.line_width, label=w.ctx.get_label(f))[0]
-                        self._line_cache[(i, f)] = line
-                        crossing_fields.add(f)
-                if len(fields) > 1:
-                    ax.legend(fontsize=CONFIG.plot.legend_fontsize)
-                ax.set_ylabel(w.ctx.get_label(fields[0]) if len(fields) == 1 else f"子图{i + 1}")
-            else:
-                txt = ax.text(0.5, 0.5, f"子图 {i + 1}（空）\n点击选中后添加参数",
-                              ha="center", va="center", transform=ax.transAxes,
-                              fontsize=CONFIG.plot.empty_text_fontsize, alpha=CONFIG.plot.empty_text_alpha)
-                self._empty_text_cache[i] = txt
+            self._render_subplot_from_scratch(ax, i, crossing_fields)
 
         self._apply_axis_decorations()
         w._layout.apply_spine_color()
@@ -291,6 +239,102 @@ class PlotRenderer:
 
         w.figure.tight_layout()
         w.canvas.draw_idle()
+
+    def _render_subplot_from_scratch(
+        self, ax, idx: int, crossing_fields: set[str],
+    ) -> None:
+        """在干净子图上全量绘制所有信号。
+
+        前提：ax 已通过 ax.clear() 清空或为新创建的 Axes。
+        由 plot_subplot 和 _full_rebuild 共用。
+
+        Args:
+            ax: 已清空的子图 Axes
+            idx: 子图索引（0-based）
+            crossing_fields: 穿越字段收集集合（就地修改）
+        """
+        w = self.w
+        fields = w.subplot_fields.get(idx, [])
+        if fields:
+            for f in fields:
+                self._create_line_for_field(ax, idx, f, crossing_fields)
+            self._apply_legend(ax, fields)
+            ax.set_ylabel(self._compute_ylabel(fields, idx))
+        else:
+            self._create_empty_text(ax, idx)
+
+    def _apply_legend(self, ax, fields: list[str], *, incremental: bool = False) -> None:
+        """根据字段数量条件性地管理子图 legend。
+
+        Args:
+            ax: 目标子图 Axes
+            fields: 子图字段列表
+            incremental: 是否增量模式。
+                False（全量模式）：仅在 len(fields)>1 时创建 legend
+                True（增量模式）：先移除旧 legend，再条件性重建
+        """
+        need_legend = len(fields) > 1
+        if incremental:
+            old_legend = ax.get_legend()
+            if old_legend is not None:
+                old_legend.remove()
+            if need_legend:
+                ax.legend(fontsize=CONFIG.plot.legend_fontsize)
+        else:
+            if need_legend:
+                ax.legend(fontsize=CONFIG.plot.legend_fontsize)
+
+    def _create_line_for_field(
+        self, ax, idx: int, field: str, crossing_fields: set[str] | None = None,
+    ) -> Any | None:
+        """在 ax 上创建信号 field 的 Line2D 并缓存。
+
+        Args:
+            ax: 目标子图 Axes
+            idx: 子图索引
+            field: 字段名
+            crossing_fields: 穿越字段收集集合（可选，不传则不收集）
+
+        Returns:
+            创建的 Line2D 对象，或 None（数据不可用）。
+        """
+        render_data = self._get_render_data(field)
+        if render_data is None:
+            return None
+        t, d = render_data
+        w = self.w
+        line = ax.plot(
+            t, d, linewidth=CONFIG.plot.line_width, label=w.ctx.get_label(field),
+        )[0]
+        self._line_cache[(idx, field)] = line
+        if crossing_fields is not None:
+            crossing_fields.add(field)
+        return line
+
+    def _create_empty_text(self, ax, idx: int) -> Any:
+        """在空子图中央显示提示文本并缓存。
+
+        Returns:
+            创建的 Text 对象。
+        """
+        txt = ax.text(
+            0.5, 0.5, f"子图 {idx + 1}（空）\n点击选中后添加参数",
+            ha="center", va="center", transform=ax.transAxes,
+            fontsize=CONFIG.plot.empty_text_fontsize, alpha=CONFIG.plot.empty_text_alpha,
+        )
+        self._empty_text_cache[idx] = txt
+        return txt
+
+    def _compute_ylabel(self, fields: list[str], idx: int) -> str:
+        """计算子图的 Y 轴标签。
+
+        单信号显示信号标签，多信号显示"子图N"，空子图返回空字符串。
+        """
+        if not fields:
+            return ""
+        if len(fields) == 1:
+            return self.w.ctx.get_label(fields[0])
+        return f"子图{idx + 1}"
 
     def _apply_axis_decorations(self) -> None:
         """应用 X 轴标签和时间格式化器（不触发重绘）。"""
