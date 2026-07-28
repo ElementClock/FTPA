@@ -1165,6 +1165,74 @@ class TestCrossingAnalyzerUpdateStats:
         assert "时间窗口:" in analyzer.last_stats_text
         assert "sig1" not in analyzer.last_stats_text
 
+    def test_stats_with_nan_values_excludes_nan(self):
+        """含 NaN 的数据段应在统计中排除 NaN，返回有效值的 min/max/mean。"""
+        time_sec = np.array([0.0, 10.0, 20.0, 30.0, 40.0])
+        sig_data = np.array([np.nan, 3.0, 5.0, 7.0, np.nan])  # 有效值: 3, 5, 7
+
+        analyzer, widget = self._make_analyzer_with_stats(
+            n_axes=1,
+            fields_per_subplot={0: ["sig1"]},
+            time_sec=time_sec,
+            data_map={"sig1": sig_data},
+            xlim=(0.0, 40.0),
+        )
+
+        analyzer.update_stats()
+
+        lines = analyzer.last_stats_text.split("\n")
+        sig_line = [l for l in lines if "sig1" in l][0]
+        # 排除 NaN 后: min=3, max=7, mean=5
+        assert "min=3" in sig_line
+        assert "max=7" in sig_line
+        assert "mean=5" in sig_line
+        # 不应出现 NaN 字符串
+        assert "nan" not in sig_line.lower()
+
+    def test_stats_with_nan_at_boundaries(self):
+        """NaN 仅在数据段边界时统计应基于中间有效值。"""
+        time_sec = np.array([0.0, 10.0, 20.0, 30.0, 40.0])
+        sig_data = np.array([np.nan, 10.0, 20.0, 30.0, np.nan])  # 有效值: 10, 20, 30
+
+        analyzer, widget = self._make_analyzer_with_stats(
+            n_axes=1,
+            fields_per_subplot={0: ["sig1"]},
+            time_sec=time_sec,
+            data_map={"sig1": sig_data},
+            xlim=(0.0, 40.0),
+        )
+
+        analyzer.update_stats()
+
+        lines = analyzer.last_stats_text.split("\n")
+        sig_line = [l for l in lines if "sig1" in l][0]
+        # 排除 NaN 后: min=10, max=30, mean=20
+        assert "min=10" in sig_line
+        assert "max=30" in sig_line
+        assert "mean=20" in sig_line
+
+    def test_stats_all_nan_does_not_crash(self):
+        """全为 NaN 的数据段不应导致崩溃（np.nanmin 全 NaN 会产生 RuntimeWarning 但返回 nan）。"""
+        time_sec = np.array([0.0, 10.0, 20.0])
+        sig_data = np.array([np.nan, np.nan, np.nan])
+
+        analyzer, widget = self._make_analyzer_with_stats(
+            n_axes=1,
+            fields_per_subplot={0: ["sig1"]},
+            time_sec=time_sec,
+            data_map={"sig1": sig_data},
+            xlim=(0.0, 20.0),
+        )
+
+        # 不应抛出异常
+        import warnings
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", RuntimeWarning)
+            analyzer.update_stats()
+
+        # 应仍有输出（含 sig1 行），即使值为 nan
+        assert "sig1" in analyzer.last_stats_text
+
 
 # ============================================================================
 # Y 轴自适应 — 缩放防抖回调测试
