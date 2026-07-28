@@ -23,6 +23,31 @@ class TestDataContext:
         result = DataContext.resolve_path(str(f))
         assert os.path.samefile(result, str(f))
 
+    def test_resolve_path_traversal_rejected(self):
+        """路径遍历（..）应被拒绝，返回 default。"""
+        result = DataContext.resolve_path("../secret.txt", default="blocked")
+        assert result == "blocked"
+
+    def test_resolve_path_traversal_nested_rejected(self):
+        """嵌套路径遍历（foo/../../etc/passwd）应被拒绝。"""
+        result = DataContext.resolve_path("foo/../../etc/passwd", default="blocked")
+        assert result == "blocked"
+
+    def test_resolve_path_no_matlab_in_search_dirs(self):
+        """DATA_DIRS 不应包含 matlab/ 目录。"""
+        from ftpa.gui.services import DATA_DIRS
+        dir_strs = [str(d) for d in DATA_DIRS]
+        assert not any("matlab" in s for s in dir_strs)
+
+    def test_resolve_path_no_project_root_in_search_dirs(self):
+        """DATA_DIRS 不应包含项目根目录（应使用 data/testdata 子目录）。"""
+        from ftpa.gui.services import DATA_DIRS
+        # 项目根目录是 DATA_DIRS 的父级，不应直接出现在列表中
+        # 检查：每个 DATA_DIRS 条目都应在 data/ 或 testdata/ 下
+        for d in DATA_DIRS:
+            d_str = str(d)
+            assert "data" in d_str or "testdata" in d_str
+
     def test_resolve_path_empty_returns_default(self):
         """空路径返回默认值。"""
         result = DataContext.resolve_path("", default="fallback")
