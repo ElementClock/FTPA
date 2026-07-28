@@ -44,6 +44,7 @@ class DataConfig:
     trim_head: int = 50
     trim_tail: int = 50
     cache_max_size: int = 5
+    max_rows: int = 5_000_000
 
 
 @dataclass(frozen=True)

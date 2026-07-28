@@ -294,23 +294,37 @@ class DataContext:
         """解析文件路径，相对路径自动搜寻已知目录。
 
         安全措施：
-        - 拒绝包含路径遍历（..）的输入
+        - 拒绝包含路径遍历（..）的输入（含 URL 编码 %2e%2e 等变体）
         - 搜索范围限制为 DATA_DIRS 中的安全目录
+        - 解析后验证路径未逃逸安全目录
         """
         if not path_value:
             return default
 
-        # 安全检查：拒绝路径遍历
-        if ".." in Path(path_value).parts:
+        # 安全检查：拒绝路径遍历（含 URL 编码和 Windows 变体）
+        path_str = str(path_value)
+        # URL 百分比编码解码（处理 %2e%2e 等）
+        try:
+            from urllib.parse import unquote
+            decoded = unquote(path_str)
+        except Exception:
+            decoded = path_str
+        if ".." in Path(decoded).parts:
             logger.warning("路径包含遍历组件（..），已拒绝: %s", path_value)
             return default
 
-        p = Path(path_value)
+        p = Path(decoded)
         if p.is_absolute() and p.exists():
             return str(p.resolve())
         for base in DATA_DIRS:
             candidate = (base / p).resolve()
             if candidate.exists():
+                # 验证解析后路径仍在安全目录内
+                try:
+                    candidate.relative_to(base.resolve())
+                except ValueError:
+                    logger.warning("解析路径逃逸安全目录，已拒绝: %s", candidate)
+                    continue
                 return str(candidate)
         return str(p.resolve())
 

@@ -23,6 +23,7 @@ import numpy as np
 import pandas as pd
 
 from ..column_config import get_replacement_rules
+from ..config import CONFIG
 from ..constants import TRIM_HEAD, TRIM_TAIL, CHUNK_SIZE
 from ..utils.strings import column_to_field_name
 from ..utils.file_utils import detect_encoding
@@ -123,6 +124,11 @@ def _read_csv(filepath: str, encoding: str) -> pd.DataFrame:
         logger.debug("dtype={3: str} 声明失败，回退到默认类型推断")
         df = pd.read_csv(filepath, encoding=encoding)
 
+    max_rows = CONFIG.data.max_rows
+    if len(df) > max_rows:
+        logger.warning("CSV 行数 %d 超过限制 %d，截断到前 %d 行", len(df), max_rows, max_rows)
+        df = df.iloc[:max_rows]
+
     return df
 
 
@@ -148,6 +154,12 @@ def _read_csv_chunked(filepath: str, encoding: str) -> pd.DataFrame:
 
     df = pd.concat(chunks, ignore_index=True, copy=False)
     del chunks  # 释放临时内存
+
+    max_rows = CONFIG.data.max_rows
+    if len(df) > max_rows:
+        logger.warning("CSV 行数 %d 超过限制 %d，截断到前 %d 行", len(df), max_rows, max_rows)
+        df = df.iloc[:max_rows]
+
     return df
 
 
