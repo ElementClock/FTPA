@@ -218,6 +218,33 @@ class PlotCanvasWidget(QWidget):
 
     # ── 外部 API（委托到控制器）──
 
+    def has_region_selection(self) -> bool:
+        """查询当前是否有已完成的框选区域。"""
+        if self._region is None:
+            return False
+        return self._region.is_selected()
+
+    def get_region_time_range(self) -> tuple[float, float] | None:
+        """获取框选区域的时间范围 (t_start, t_end)，无框选时返回 None。"""
+        if self._region is None:
+            return None
+        return self._region.get_region()
+
+    def apply_region_selection(self) -> bool:
+        """应用框选区域穿越检测。
+
+        Returns:
+            True  — 穿越检测成功，已缩放并自动清除框选
+            False — 穿越检测失败或无框选区域
+        """
+        if self._region is None:
+            return False
+        return self._region.apply_selection()
+
+    def add_signal_to_subplot(self, idx: int, field: str) -> None:
+        """向指定子图添加信号（供拖放等外部调用）。"""
+        self._renderer._add_to_subplot(idx, field)
+
     def get_selected_subplot(self) -> int | None:
         """获取当前选中的子图索引。"""
         return self._layout.get_selected_subplot()

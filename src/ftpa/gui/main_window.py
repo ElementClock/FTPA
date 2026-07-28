@@ -372,12 +372,12 @@ class MainWindow(QMainWindow):
             return
 
         # 检测是否有框选区域
-        region = self.plot_widget._region.get_region() if self.plot_widget._region.is_selected() else None
+        region = self.plot_widget.get_region_time_range() if self.plot_widget.has_region_selection() else None
 
         if region is not None:
             # 有框选区域 → 设置穿越参数后在框选区间内执行穿越检测
             self.plot_widget.set_crossing_context(left_val, left_mode, right_val, right_mode, master)
-            success = self.plot_widget._region.apply_selection()
+            success = self.plot_widget.apply_region_selection()
             if success:
                 # 更新信息显示框
                 stats = self.plot_widget.get_stats_text()
