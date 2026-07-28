@@ -34,10 +34,9 @@ from ..utils.strings import column_to_field_name
 logger = logging.getLogger(__name__)
 
 DATA_DIRS = [
-    Path(__file__).resolve().parents[2],  # project root
     Path(__file__).resolve().parents[2] / "data",
     Path(__file__).resolve().parents[2] / "data" / "raw",
-    Path(__file__).resolve().parents[2] / "matlab",
+    Path(__file__).resolve().parents[2] / "testdata",
 ]
 
 
@@ -292,9 +291,20 @@ class DataContext:
 
     @staticmethod
     def resolve_path(path_value: str | os.PathLike[str] | None, default: str = "") -> str:
-        """解析文件路径，相对路径自动搜寻已知目录。"""
+        """解析文件路径，相对路径自动搜寻已知目录。
+
+        安全措施：
+        - 拒绝包含路径遍历（..）的输入
+        - 搜索范围限制为 DATA_DIRS 中的安全目录
+        """
         if not path_value:
             return default
+
+        # 安全检查：拒绝路径遍历
+        if ".." in Path(path_value).parts:
+            logger.warning("路径包含遍历组件（..），已拒绝: %s", path_value)
+            return default
+
         p = Path(path_value)
         if p.is_absolute() and p.exists():
             return str(p.resolve())
