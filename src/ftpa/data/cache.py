@@ -22,6 +22,11 @@ class FileCache:
     - hits / misses 计数器用于调试和性能监控
     """
 
+    @staticmethod
+    def _normalize_key(key: str) -> str:
+        """规范化缓存键：统一大小写（Windows）和路径格式。"""
+        return os.path.normcase(os.path.abspath(key))
+
     def __init__(self, max_size: int | None = None, check_mtime: bool = True):
         """
         参数:
@@ -40,6 +45,7 @@ class FileCache:
 
     def get(self, key: str):
         """获取缓存值。若启用 mtime 校验且文件已修改，返回 None 并移除条目。"""
+        key = self._normalize_key(key)
         with self._lock:
             if key not in self._cache:
                 self.misses += 1
@@ -66,6 +72,7 @@ class FileCache:
 
     def set(self, key: str, value):
         """设置缓存值。超出 max_size 时淘汰最久未访问的条目。"""
+        key = self._normalize_key(key)
         with self._lock:
             if key in self._cache:
                 self._cache.move_to_end(key)
@@ -85,6 +92,7 @@ class FileCache:
 
     def has(self, key: str) -> bool:
         """检查缓存中是否存在指定键（不做 mtime 校验）。"""
+        key = self._normalize_key(key)
         with self._lock:
             return key in self._cache
 
