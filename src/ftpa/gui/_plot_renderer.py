@@ -465,7 +465,6 @@ class PlotRenderer:
             w.log_message.emit("请先点击选中一个子图")
             return
         self._clear_subplot(idx)
-        w.log_message.emit(f"已清空子图 {idx + 1}")
 
     # ── 数据设置 ──
 

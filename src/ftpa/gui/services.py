@@ -557,6 +557,9 @@ class DataContext:
         return len(self.time_vec) if self.time_vec is not None else 0
 
     def get_column_count(self) -> int:
+        """返回信号列数（排除 TIME/filename 等元数据键）。"""
+        if self.field_resolver is not None:
+            return len(self.field_resolver.get_field_names())
         return len(self.data) if self.data else 0
 
     def get_time_range_sec(self) -> tuple[float, float]:

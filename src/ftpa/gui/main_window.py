@@ -354,15 +354,23 @@ class MainWindow(QMainWindow):
 
     # ── 穿越控制 ──
 
+    def _safe_float(self, text: str, default: float = 0.0) -> float:
+        """安全转换文本为浮点数，失败时返回默认值并提示。"""
+        try:
+            return float(text) if text else default
+        except ValueError:
+            self._append_log(f"无效数值输入: '{text}'，使用默认值 {default}")
+            return default
+
     def _on_apply_crossing(self):
         """应用穿越分析。
 
         当有框选区域时，在框选区间内执行穿越检测；
         否则使用当前视图范围（原有行为）。
         """
-        left_val = float(self.left_threshold.text() or 0)
+        left_val = self._safe_float(self.left_threshold.text(), 0.0)
         left_mode = self.left_mode.currentText()
-        right_val = float(self.right_threshold.text() or 0)
+        right_val = self._safe_float(self.right_threshold.text(), 0.0)
         right_mode = self.right_mode.currentText()
         # 从中文标签反查 field_name
         master_label = self.master_combo.currentText()
