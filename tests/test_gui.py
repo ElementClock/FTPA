@@ -28,6 +28,11 @@ class TestDataContext:
         result = DataContext.resolve_path("../secret.txt", default="blocked")
         assert result == "blocked"
 
+    def test_resolve_path_url_encoded_traversal_rejected(self):
+        """URL编码的路径遍历应被拒绝。"""
+        result = DataContext.resolve_path("%2e%2e/secrets", default="")
+        assert result == ""
+
     def test_resolve_path_traversal_nested_rejected(self):
         """嵌套路径遍历（foo/../../etc/passwd）应被拒绝。"""
         result = DataContext.resolve_path("foo/../../etc/passwd", default="blocked")

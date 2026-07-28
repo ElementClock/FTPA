@@ -10,11 +10,12 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from matplotlib.ticker import FuncFormatter
 
 from ..time_utils import format_time_seconds
+from ..config import CONFIG
 
 if TYPE_CHECKING:
     from .panel_plot import PlotCanvasWidget
@@ -198,11 +199,11 @@ class LayoutController:
         for i, ax in enumerate(w.axes):
             for spine in ax.spines.values():
                 if w._selected_subplot_idx == i:
-                    spine.set_color("#1976D2")
+                    spine.set_color(CONFIG.plot.selected_color)
                     spine.set_linewidth(2.5)
                     spine.set_linestyle("solid")
                 else:
-                    spine.set_color("#cccccc")
+                    spine.set_color(CONFIG.plot.unselected_color)
                     spine.set_linewidth(0.8)
                     spine.set_linestyle("solid")
 
@@ -221,12 +222,12 @@ class LayoutController:
                     spine.set_linewidth(2.5)
                 elif w._selected_subplot_idx == i:
                     # 选中子图：保持蓝色实线
-                    spine.set_color("#1976D2")
+                    spine.set_color(CONFIG.plot.selected_color)
                     spine.set_linestyle("solid")
                     spine.set_linewidth(2.5)
                 else:
                     # 普通子图：浅灰实线
-                    spine.set_color("#cccccc")
+                    spine.set_color(CONFIG.plot.unselected_color)
                     spine.set_linestyle("solid")
                     spine.set_linewidth(0.8)
         w.canvas.draw_idle()

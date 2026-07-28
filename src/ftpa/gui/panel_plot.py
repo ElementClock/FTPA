@@ -23,8 +23,6 @@
 
 from __future__ import annotations
 
-from typing import Any
-
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
@@ -46,6 +44,7 @@ from ._plot_renderer import PlotRenderer
 from ._crossing_analyzer import CrossingAnalyzer
 from ._pan_ctrl import PanController
 from ._region_ctrl import RegionController
+from ..config import CONFIG
 
 # 确保使用 Qt 后端（仅在 matplotlib 尚未初始化后端时设置）
 if matplotlib.get_backend() == "_agg":
@@ -201,11 +200,11 @@ class PlotCanvasWidget(QWidget):
                 # 右键拖动完成 → 框选区域已建立，不触发菜单
                 return
             # 右键单击 → 触发上下文菜单（与原有行为一致）
-            self._renderer._right_clicked_idx = None
+            self._renderer.right_clicked_subplot = None
             if event.inaxes is not None:
                 for i, ax in enumerate(self.axes):
                     if ax == event.inaxes:
-                        self._renderer._right_clicked_idx = i
+                        self._renderer.right_clicked_subplot = i
                         break
             self._renderer.show_context_menu(event)
             return
@@ -335,11 +334,11 @@ class PlotCanvasWidget(QWidget):
             path, _ = QFileDialog.getSaveFileName(
                 self, "保存截图", "plot.png", "PNG (*.png);;PDF (*.pdf);;SVG (*.svg)")
             if path:
-                self.figure.savefig(path, dpi=150, bbox_inches="tight")
+                self.figure.savefig(path, dpi=CONFIG.plot.screenshot_dpi, bbox_inches="tight")
                 self.log_message.emit(f"截图已保存: {path}")
                 return path
             return None
         else:
-            self.figure.savefig(filepath, dpi=150, bbox_inches="tight")
+            self.figure.savefig(filepath, dpi=CONFIG.plot.screenshot_dpi, bbox_inches="tight")
             self.log_message.emit(f"截图已保存: {filepath}")
             return filepath

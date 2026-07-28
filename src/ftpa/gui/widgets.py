@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Qt, QSortFilterProxyModel, QStringListModel, Signal
-from PySide6.QtGui import QStandardItem, QStandardItemModel, QFont
+from PySide6.QtGui import QStandardItem, QStandardItemModel
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -16,8 +16,6 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QListView,
-    QPushButton,
-    QSizePolicy,
     QTableWidget,
     QTableWidgetItem,
     QTreeWidget,

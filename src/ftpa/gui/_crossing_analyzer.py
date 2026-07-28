@@ -316,48 +316,6 @@ class CrossingAnalyzer:
                                           alpha=0.7, linestyle=linestyles[side])
                         self.crossing_lines.append(line)
 
-    def _redraw_crossing(self) -> None:
-        """重新绘制穿越线（全量数据搜索，保留向后兼容）。
-
-        注意：apply_crossing 已改为窗口内搜索，此方法仅供外部兼容调用。
-        """
-        w = self.w
-        self._clear_crossing_lines()
-        ctx = w.ctx
-        if ctx is None or ctx.time_sec is None:
-            return
-
-        if not self.master_field:
-            w.canvas.draw_idle()
-            return
-
-        master_data = ctx.data.get(self.master_field)
-        if master_data is None:
-            w.canvas.draw_idle()
-            return
-
-        # 清空上次的穿越点缓存
-        self._crossing_x = {"left": None, "right": None}
-
-        master_arr = master_data  # 已由 DataContext 预转为 float64
-        colors = {"left": "red", "right": "firebrick"}
-        linestyles = {"left": "solid", "right": "dashed"}
-
-        for side, (val, mode) in [("left", (self.left_val, self.left_mode)),
-                                   ("right", (self.right_val, self.right_mode))]:
-            pos = find_crossing_points(master_arr, val, mode)
-            if pos is not None:
-                x_pos = float(ctx.time_sec[pos - 1])
-                self._crossing_x[side] = x_pos  # 保存坐标
-                for ax in w.axes:
-                    if ax.get_visible():
-                        line = ax.axvline(x_pos, color=colors[side], linewidth=1.0,
-                                          alpha=0.7, linestyle=linestyles[side])
-                        self.crossing_lines.append(line)
-
-        w.canvas.draw_idle()
-        self.update_stats()
-
     # ── Y 轴自动调整 ──
 
     def _adjust_y_limits(self) -> None:
@@ -469,6 +427,7 @@ class CrossingAnalyzer:
                 cur_start = float(cur_xlim[0])
                 cur_end = float(cur_xlim[1])
             except Exception:
+                logger.debug("获取 xlim 失败", exc_info=True)
                 return
 
             span = cur_end - cur_start
@@ -513,7 +472,7 @@ class CrossingAnalyzer:
             logger.exception("on_scroll_zoom 执行失败")
 
     def on_canvas_zoom(self, event=None) -> None:
-        """画布缩放/滚动/平移后更新统计 + Y轴自适应（防抖 200ms）。
+        """画布缩放/滚动/平移后更新统计 + Y轴自适应（防抖）。
 
         防抖回调 _zoom_timeout_cb 中执行：
           1. _adjust_y_limits() — Y轴自适应（5%边距）
@@ -526,7 +485,7 @@ class CrossingAnalyzer:
             self._zoom_timer.setSingleShot(True)
             self._zoom_timer.timeout.connect(self._zoom_timeout_cb)
         self._zoom_snapshot_axes_count = len(w.axes)
-        self._zoom_timer.start(200)
+        self._zoom_timer.start(CONFIG.gui.zoom_debounce_ms)
 
     def _zoom_timeout_cb(self) -> None:
         """缩放防抖回调：Y轴自适应 + 数据刷新 + 统计更新。
