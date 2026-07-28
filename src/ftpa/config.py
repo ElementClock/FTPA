@@ -36,6 +36,13 @@ class PlotConfig:
     y_margin_ratio: float = 0.05
     downsample_threshold: int = 3000
     downsample_target: int = 1500
+    line_width: float = 0.8
+    empty_text_fontsize: int = 9
+    empty_text_alpha: float = 0.4
+    legend_fontsize: int = 8
+    selected_color: str = "#1976D2"
+    unselected_color: str = "#cccccc"
+    screenshot_dpi: int = 150
 
 
 @dataclass(frozen=True)
@@ -52,6 +59,7 @@ class GuiConfig:
     """GUI 界面相关配置。"""
     window_width: int = 1400
     window_height: int = 860
+    zoom_debounce_ms: int = 200
 
 
 @dataclass(frozen=True)

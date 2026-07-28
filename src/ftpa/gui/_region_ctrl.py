@@ -27,6 +27,7 @@ from typing import TYPE_CHECKING
 from PySide6.QtCore import Qt
 
 from ..time_utils import format_time_seconds
+from ..config import CONFIG
 
 if TYPE_CHECKING:
     from .panel_plot import PlotCanvasWidget
@@ -303,13 +304,13 @@ class RegionController:
                 continue
 
             # 半透明蓝色覆盖层
-            span = ax.axvspan(t_min, t_max, alpha=0.15, color='#1976D2', zorder=0)
+            span = ax.axvspan(t_min, t_max, alpha=0.15, color=CONFIG.plot.selected_color, zorder=0)
             self._span_artists.append(span)
 
             # 蓝色虚线边界
-            line_left = ax.axvline(t_min, color='#1976D2', linestyle='--',
+            line_left = ax.axvline(t_min, color=CONFIG.plot.selected_color, linestyle='--',
                                    linewidth=1.0, alpha=0.8, zorder=5)
-            line_right = ax.axvline(t_max, color='#1976D2', linestyle='--',
+            line_right = ax.axvline(t_max, color=CONFIG.plot.selected_color, linestyle='--',
                                     linewidth=1.0, alpha=0.8, zorder=5)
             self._line_artists.extend([line_left, line_right])
 
@@ -323,7 +324,7 @@ class RegionController:
                     ha='center', va='top', fontsize=9,
                     color='#1565C0', fontweight='bold',
                     bbox=dict(boxstyle='round,pad=0.3', facecolor='white',
-                              edgecolor='#1976D2', alpha=0.9),
+                              edgecolor=CONFIG.plot.selected_color, alpha=0.9),
                     zorder=10
                 )
                 self._label_artists.append(txt)

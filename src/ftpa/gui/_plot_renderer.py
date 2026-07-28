@@ -128,15 +128,16 @@ class PlotRenderer:
                 render_data = self._get_render_data(f)
                 if render_data is not None:
                     t, d = render_data
-                    line = ax.plot(t, d, linewidth=0.8, label=w.ctx.get_label(f))[0]
+                    line = ax.plot(t, d, linewidth=CONFIG.plot.line_width, label=w.ctx.get_label(f))[0]
                     self._line_cache[(idx, f)] = line
                     crossing_fields.add(f)
             if len(fields) > 1:
-                ax.legend(fontsize=8)
+                ax.legend(fontsize=CONFIG.plot.legend_fontsize)
             ax.set_ylabel(w.ctx.get_label(fields[0]) if len(fields) == 1 else f"子图{idx + 1}")
         else:
             txt = ax.text(0.5, 0.5, f"子图 {idx + 1}（空）\n点击选中后添加参数",
-                         ha="center", va="center", transform=ax.transAxes, fontsize=9, alpha=0.4)
+                         ha="center", va="center", transform=ax.transAxes,
+                         fontsize=CONFIG.plot.empty_text_fontsize, alpha=CONFIG.plot.empty_text_alpha)
             self._empty_text_cache[idx] = txt
 
     def rebuild_plot(self, layout_changed: bool = False) -> None:
@@ -198,7 +199,7 @@ class PlotRenderer:
                     line.set_ydata(d)
                 else:
                     # 新建 Line2D
-                    line = ax.plot(t, d, linewidth=0.8, label=w.ctx.get_label(f))[0]
+                    line = ax.plot(t, d, linewidth=CONFIG.plot.line_width, label=w.ctx.get_label(f))[0]
                     self._line_cache[key] = line
 
             # 4. 处理空子图文本标注
@@ -206,7 +207,7 @@ class PlotRenderer:
                 if i not in self._empty_text_cache:
                     txt = ax.text(0.5, 0.5, f"子图 {i + 1}（空）\n点击选中后添加参数",
                                   ha="center", va="center", transform=ax.transAxes,
-                                  fontsize=9, alpha=0.4)
+                                  fontsize=CONFIG.plot.empty_text_fontsize, alpha=CONFIG.plot.empty_text_alpha)
                     self._empty_text_cache[i] = txt
             else:
                 txt = self._empty_text_cache.pop(i, None)
@@ -225,7 +226,7 @@ class PlotRenderer:
                 if old_legend is not None:
                     old_legend.remove()
                 # 重建 legend 以反映当前 label
-                ax.legend(fontsize=8)
+                ax.legend(fontsize=CONFIG.plot.legend_fontsize)
 
             # 6. 处理 ylabel
             if fields:
@@ -267,16 +268,16 @@ class PlotRenderer:
                     render_data = self._get_render_data(f)
                     if render_data is not None:
                         t, d = render_data
-                        line = ax.plot(t, d, linewidth=0.8, label=w.ctx.get_label(f))[0]
+                        line = ax.plot(t, d, linewidth=CONFIG.plot.line_width, label=w.ctx.get_label(f))[0]
                         self._line_cache[(i, f)] = line
                         crossing_fields.add(f)
                 if len(fields) > 1:
-                    ax.legend(fontsize=8)
+                    ax.legend(fontsize=CONFIG.plot.legend_fontsize)
                 ax.set_ylabel(w.ctx.get_label(fields[0]) if len(fields) == 1 else f"子图{i + 1}")
             else:
                 txt = ax.text(0.5, 0.5, f"子图 {i + 1}（空）\n点击选中后添加参数",
                               ha="center", va="center", transform=ax.transAxes,
-                              fontsize=9, alpha=0.4)
+                              fontsize=CONFIG.plot.empty_text_fontsize, alpha=CONFIG.plot.empty_text_alpha)
                 self._empty_text_cache[i] = txt
 
         self._apply_axis_decorations()

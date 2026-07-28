@@ -44,6 +44,7 @@ from ._plot_renderer import PlotRenderer
 from ._crossing_analyzer import CrossingAnalyzer
 from ._pan_ctrl import PanController
 from ._region_ctrl import RegionController
+from ..config import CONFIG
 
 # 确保使用 Qt 后端（仅在 matplotlib 尚未初始化后端时设置）
 if matplotlib.get_backend() == "_agg":
@@ -333,11 +334,11 @@ class PlotCanvasWidget(QWidget):
             path, _ = QFileDialog.getSaveFileName(
                 self, "保存截图", "plot.png", "PNG (*.png);;PDF (*.pdf);;SVG (*.svg)")
             if path:
-                self.figure.savefig(path, dpi=150, bbox_inches="tight")
+                self.figure.savefig(path, dpi=CONFIG.plot.screenshot_dpi, bbox_inches="tight")
                 self.log_message.emit(f"截图已保存: {path}")
                 return path
             return None
         else:
-            self.figure.savefig(filepath, dpi=150, bbox_inches="tight")
+            self.figure.savefig(filepath, dpi=CONFIG.plot.screenshot_dpi, bbox_inches="tight")
             self.log_message.emit(f"截图已保存: {filepath}")
             return filepath
