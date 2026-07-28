@@ -330,6 +330,7 @@ class PlotRenderer:
             w.subplot_fields[idx] = []
         w.subplot_fields[idx].append(field_name)
         w.log_message.emit(f"添加信号 [{w.ctx.get_label(field_name)}] 到子图 {idx + 1}")
+        w.subplot_fields_changed.emit()
         self.rebuild_plot()
 
     def remove_from_subplot(self, field_name: str) -> None:
@@ -345,6 +346,7 @@ class PlotRenderer:
         if idx in w.subplot_fields and field_name in w.subplot_fields[idx]:
             w.subplot_fields[idx].remove(field_name)
             w.log_message.emit(f"从子图 {idx + 1} 移除信号 [{w.ctx.get_label(field_name)}]")
+            w.subplot_fields_changed.emit()
             self.rebuild_plot()
         else:
             w.log_message.emit(f"子图 {idx + 1} 中不存在该信号")
@@ -364,19 +366,19 @@ class PlotRenderer:
         menu = QMenu(w)
 
         # ── 区域筛选（框选区域存在时显示）──
-        if w._region.is_selected():
-            region = w._region.get_region()
+        if w.has_region_selection():
+            region = w.get_region_time_range()
             if region is not None:
                 from ..time_utils import format_time_seconds
                 t_start, t_end = region
                 region_label = (f"应用区域筛选 ({format_time_seconds(t_start)} → "
                                 f"{format_time_seconds(t_end)})")
                 act_apply_region = QAction(region_label, w)
-                act_apply_region.triggered.connect(lambda: w._region.apply_selection())
+                act_apply_region.triggered.connect(lambda: w.apply_region_selection())
                 menu.addAction(act_apply_region)
 
             act_cancel_region = QAction("取消区域筛选", w)
-            act_cancel_region.triggered.connect(lambda: w._region.cancel_selection())
+            act_cancel_region.triggered.connect(lambda: w.cancel_region_selection())
             menu.addAction(act_cancel_region)
             menu.addSeparator()
 

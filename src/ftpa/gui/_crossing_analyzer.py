@@ -162,7 +162,7 @@ class CrossingAnalyzer:
             return False
 
         # 任何缩放操作都应清除框选覆盖层（缩放后时间范围已变化）
-        w._region.cancel_selection()
+        w.cancel_region_selection()
 
         # ── 在窗口内搜索穿越点（排除 NaN） ──
         time_sec = ctx.time_sec

@@ -263,6 +263,11 @@ class PlotCanvasWidget(QWidget):
         """向指定子图添加信号（供拖放等外部调用）。"""
         self._renderer._add_to_subplot(idx, field)
 
+    def cancel_region_selection(self) -> None:
+        """取消框选区域覆盖层。"""
+        if self._region is not None:
+            self._region.cancel_selection()
+
     def get_selected_subplot(self) -> int | None:
         """获取当前选中的子图索引。"""
         return self._layout.get_selected_subplot()
