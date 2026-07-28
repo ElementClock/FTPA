@@ -192,7 +192,7 @@ class CanvasDropFilter(QObject):
         self.w._layout.clear_drag_highlight()
 
         # 添加信号到目标子图
-        self.w._renderer._add_to_subplot(hit_idx, field_name)
+        self.w.add_signal_to_subplot(hit_idx, field_name)
 
         # 通知外部更新参数树指示器
         self.w.param_dropped.emit(field_name)

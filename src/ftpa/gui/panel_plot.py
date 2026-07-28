@@ -74,7 +74,7 @@ class PlotCanvasWidget(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.ctx: DataContext | None = None
+        self._ctx: DataContext | None = None
 
         # 动态子图管理（共享状态）
         self._layout_mode: str = "1x1"  # "1x1" | "2x1" | "3x1" | "4x1" | "2x2"
@@ -83,13 +83,10 @@ class PlotCanvasWidget(QWidget):
         self.axes: list[plt.Axes] = []
 
         # 子图信号分配: 子图索引 -> field_name 列表
-        self.subplot_fields: dict[int, list[str]] = {0: []}
+        self._subplot_fields: dict[int, list[str]] = {0: []}
 
         # 子图选择
         self._selected_subplot_idx: int | None = None
-
-        # 右键菜单追踪
-        self._right_clicked_axes_idx: int | None = None
 
         # 首次调用时扫描字体（_configure_display_font 是惰性的）
         _configure_display_font()
@@ -111,6 +108,27 @@ class PlotCanvasWidget(QWidget):
         self._drop_filter = CanvasDropFilter(self)
         self.canvas.installEventFilter(self._drop_filter)
         self.canvas.setAcceptDrops(True)
+
+    # ── 属性代理 ──
+
+    @property
+    def subplot_fields(self) -> dict[int, list[str]]:
+        """子图信号分配（写操作自动 emit subplot_fields_changed）。"""
+        return self._subplot_fields
+
+    @subplot_fields.setter
+    def subplot_fields(self, value: dict[int, list[str]]) -> None:
+        self._subplot_fields = value
+        self.subplot_fields_changed.emit()
+
+    @property
+    def ctx(self) -> DataContext | None:
+        """数据上下文（不发信号，保持 set_data_context() 显式调用流程）。"""
+        return self._ctx
+
+    @ctx.setter
+    def ctx(self, value: DataContext | None) -> None:
+        self._ctx = value
 
     # ── UI 构建 ──
 
@@ -183,11 +201,11 @@ class PlotCanvasWidget(QWidget):
                 # 右键拖动完成 → 框选区域已建立，不触发菜单
                 return
             # 右键单击 → 触发上下文菜单（与原有行为一致）
-            self._right_clicked_axes_idx = None
+            self._renderer._right_clicked_idx = None
             if event.inaxes is not None:
                 for i, ax in enumerate(self.axes):
                     if ax == event.inaxes:
-                        self._right_clicked_axes_idx = i
+                        self._renderer._right_clicked_idx = i
                         break
             self._renderer.show_context_menu(event)
             return
@@ -217,6 +235,33 @@ class PlotCanvasWidget(QWidget):
         self._crossing.on_scroll_zoom(event)
 
     # ── 外部 API（委托到控制器）──
+
+    def has_region_selection(self) -> bool:
+        """查询当前是否有已完成的框选区域。"""
+        if self._region is None:
+            return False
+        return self._region.is_selected()
+
+    def get_region_time_range(self) -> tuple[float, float] | None:
+        """获取框选区域的时间范围 (t_start, t_end)，无框选时返回 None。"""
+        if self._region is None:
+            return None
+        return self._region.get_region()
+
+    def apply_region_selection(self) -> bool:
+        """应用框选区域穿越检测。
+
+        Returns:
+            True  — 穿越检测成功，已缩放并自动清除框选
+            False — 穿越检测失败或无框选区域
+        """
+        if self._region is None:
+            return False
+        return self._region.apply_selection()
+
+    def add_signal_to_subplot(self, idx: int, field: str) -> None:
+        """向指定子图添加信号（供拖放等外部调用）。"""
+        self._renderer._add_to_subplot(idx, field)
 
     def get_selected_subplot(self) -> int | None:
         """获取当前选中的子图索引。"""

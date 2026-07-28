@@ -45,6 +45,8 @@ class PlotRenderer:
         self._line_cache: dict[tuple[int, str], Any] = {}
         # 空子图文本标注缓存: subplot_idx -> Text
         self._empty_text_cache: dict[int, Any] = {}
+        # 右键菜单追踪：当前右键点击的子图索引
+        self._right_clicked_idx: int | None = None
 
     def invalidate_cache(self) -> None:
         """清除 Line2D 缓存（布局切换/axes 重建时调用）。"""
@@ -389,7 +391,7 @@ class PlotRenderer:
             layout_menu.addAction(act)
 
         # ── 信号管理（右键点击子图时显示）──
-        idx = w._right_clicked_axes_idx
+        idx = self._right_clicked_idx
         current_fields = w.subplot_fields.get(idx, []) if idx is not None else []
 
         if ctx is not None and idx is not None:
