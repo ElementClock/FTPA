@@ -173,14 +173,16 @@ def _convert_flight_time(
         logger.warning("无法识别 CSV 时间列结构: %s，跳过时间处理", e)
         return df
 
-    # 过滤不可信数据
+    # 过滤不可信数据（就地过滤，避免大文件创建副本导致峰值内存翻倍）
     if filter_reliable and flag_col in df.columns:
         before = len(df)
-        df = df[df[flag_col] == 1].copy()
-        after = len(df)
+        unreliable_mask = df[flag_col] != 1
+        after = before - int(unreliable_mask.sum())
         if after == 0:
             logger.warning("过滤后无可信数据，保留全部")
             return df
+        df.drop(df[unreliable_mask].index, inplace=True)
+        df.reset_index(drop=True, inplace=True)
         logger.debug("标识符过滤: %d → %d 行", before, after)
 
     if df.empty:
