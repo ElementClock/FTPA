@@ -280,6 +280,7 @@ def _parse_date_column(df: pd.DataFrame, date_column: str) -> pd.Series:
             if parsed.isna().sum() / len(parsed) > 0.5:
                 parsed = None
         except Exception:
+            logger.debug("日期解析失败 (格式 %%Y/%%m/%%d): %s", sample, exc_info=True)
             parsed = None
     elif len(sample) >= 8:  # "25-10-13" 格式
         try:
@@ -287,6 +288,7 @@ def _parse_date_column(df: pd.DataFrame, date_column: str) -> pd.Series:
             if parsed.isna().sum() / len(parsed) > 0.5:
                 parsed = None
         except Exception:
+            logger.debug("日期解析失败 (格式 %%y-%%m-%%d): %s", sample, exc_info=True)
             parsed = None
 
     # 自动推断兜底

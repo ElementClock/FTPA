@@ -48,6 +48,17 @@ class PlotRenderer:
         # 右键菜单追踪：当前右键点击的子图索引
         self._right_clicked_idx: int | None = None
 
+    # ── 公共属性 ──
+
+    @property
+    def right_clicked_subplot(self) -> int | None:
+        """当前右键点击的子图索引（公开访问接口）。"""
+        return self._right_clicked_idx
+
+    @right_clicked_subplot.setter
+    def right_clicked_subplot(self, value: int | None) -> None:
+        self._right_clicked_idx = value
+
     def invalidate_cache(self) -> None:
         """清除 Line2D 缓存（布局切换/axes 重建时调用）。"""
         self._line_cache.clear()
@@ -369,7 +380,6 @@ class PlotRenderer:
         if w.has_region_selection():
             region = w.get_region_time_range()
             if region is not None:
-                from ..time_utils import format_time_seconds
                 t_start, t_end = region
                 region_label = (f"应用区域筛选 ({format_time_seconds(t_start)} → "
                                 f"{format_time_seconds(t_end)})")

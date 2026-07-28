@@ -25,14 +25,13 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QSettings, QThread
+from PySide6.QtCore import Qt, QSettings
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (
     QApplication,
     QComboBox,
     QFileDialog,
     QGridLayout,
-    QHBoxLayout,
     QLabel,
     QLineEdit,
     QMainWindow,
@@ -86,7 +85,7 @@ class MainWindow(QMainWindow):
         self.plot_widget = PlotCanvasWidget()
         self.plot_widget.log_message.connect(self._append_log)
         self.plot_widget.subplot_selected.connect(self._on_subplot_selected)
-        self.plot_widget.param_dropped.connect(self._on_param_dropped)
+        self.plot_widget.param_dropped.connect(self._on_subplot_fields_changed)
         self.plot_widget.subplot_fields_changed.connect(self._on_subplot_fields_changed)
 
         self.param_tree = ParameterTreeWidget()
@@ -306,13 +305,8 @@ class MainWindow(QMainWindow):
 
     # ── 参数树操作 ──
 
-    def _on_subplot_fields_changed(self):
-        """子图信号列表变化回调 — 更新参数树指示器和穿越信号下拉框。"""
-        self._update_param_tree_indicators()
-        self._update_master_combo()
-
-    def _on_param_dropped(self, field_name: str):
-        """拖放参数到子图后的回调 — 更新指示器和下拉框。"""
+    def _on_subplot_fields_changed(self, field_name: str = ""):
+        """子图信号列表变化 / 拖放参数回调 — 更新参数树指示器和穿越信号下拉框。"""
         self._update_param_tree_indicators()
         self._update_master_combo()
 
@@ -471,7 +465,7 @@ class MainWindow(QMainWindow):
                     old_thread.quit()
                     old_thread.wait(3000)
             except RuntimeError:
-                pass
+                logger.debug("旧加载线程清理失败", exc_info=True)
             old_thread = None
 
         self.status_bar.showMessage("加载中...")
@@ -666,7 +660,7 @@ class MainWindow(QMainWindow):
                     thread.quit()
                     thread.wait(3000)
             except RuntimeError:
-                pass
+                logger.debug("加载线程清理失败", exc_info=True)
             self._load_thread = None
 
         # 清空数据上下文，释放 numpy 数组内存

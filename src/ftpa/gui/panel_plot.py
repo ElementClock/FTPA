@@ -23,8 +23,6 @@
 
 from __future__ import annotations
 
-from typing import Any
-
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
@@ -201,11 +199,11 @@ class PlotCanvasWidget(QWidget):
                 # 右键拖动完成 → 框选区域已建立，不触发菜单
                 return
             # 右键单击 → 触发上下文菜单（与原有行为一致）
-            self._renderer._right_clicked_idx = None
+            self._renderer.right_clicked_subplot = None
             if event.inaxes is not None:
                 for i, ax in enumerate(self.axes):
                     if ax == event.inaxes:
-                        self._renderer._right_clicked_idx = i
+                        self._renderer.right_clicked_subplot = i
                         break
             self._renderer.show_context_menu(event)
             return

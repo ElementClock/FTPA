@@ -14,7 +14,6 @@ import pandas as pd
 
 from ..computing.weight_cg import add_weight_cg_to_data
 from ..computing import compute_fitted_circle_radius
-from ..constants import BASE_OIL, BASE_REL_CG, BASE_WEIGHT
 from ..data import param_extract
 from ..exporter import (
     export_data,
