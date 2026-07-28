@@ -76,12 +76,25 @@ def _find_config_file() -> Path | None:
     return None
 
 
+def _filter_known_fields(data: dict[str, Any], cls: type) -> dict[str, Any]:
+    """过滤 TOML 子字典，仅保留目标 dataclass 的已知字段。
+
+    防止拼写错误的键导致 TypeError 使整个配置回退为默认值。
+    """
+    from dataclasses import fields
+    known = {f.name for f in fields(cls)}
+    unknown = set(data.keys()) - known
+    if unknown:
+        logger.warning("配置文件中存在未知键 %s，已忽略", unknown)
+    return {k: v for k, v in data.items() if k in known}
+
+
 def _merge_toml_into_config(toml_data: dict[str, Any], config: Config) -> Config:
     """将 TOML 字典合并到 Config 默认值上，返回新的 Config 实例。"""
-    zoom_kw = toml_data.get("zoom", {})
-    plot_kw = toml_data.get("plot", {})
-    data_kw = toml_data.get("data", {})
-    gui_kw = toml_data.get("gui", {})
+    zoom_kw = _filter_known_fields(toml_data.get("zoom", {}), ZoomConfig)
+    plot_kw = _filter_known_fields(toml_data.get("plot", {}), PlotConfig)
+    data_kw = _filter_known_fields(toml_data.get("data", {}), DataConfig)
+    gui_kw = _filter_known_fields(toml_data.get("gui", {}), GuiConfig)
 
     return Config(
         zoom=ZoomConfig(**zoom_kw),

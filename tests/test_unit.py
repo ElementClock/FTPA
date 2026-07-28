@@ -256,6 +256,16 @@ class TestTimeUtils:
 
 
 # ============================================================================
+    def test_select_time_window_empty_array(self):
+        """空时间数组不应崩溃（Critical 修复验证）。"""
+        time_vec = np.array([], dtype='timedelta64[s]')
+        i_start, i_end, start, end = select_time_window(time_vec, 0, 10)
+        assert i_start == 0
+        assert i_end == 0
+        assert start == 0.0
+        assert end == 0.0
+
+
 # computing.py 测试
 # ============================================================================
 

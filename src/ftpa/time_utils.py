@@ -83,6 +83,10 @@ def select_time_window(time_vec, t_start, t_end):
 
     n = len(time_sec)
 
+    # 空数组防御：searchsorted 对空数组返回 0，后续索引会越界
+    if n == 0:
+        return 0, 0, 0.0, 0.0
+
     # O(log N) 查找：先用 searchsorted 定位插入点，再调整到最近点
     i_start = int(np.searchsorted(time_sec, t_start_sec, side="left"))
     if i_start >= n:

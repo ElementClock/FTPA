@@ -331,6 +331,10 @@ class DataContext:
             self.time_sec = time_to_seconds_array(self.time_vec)
             self.source_type = "txt"
 
+            # searchsorted 依赖 time_sec 单调递增，一次性验证
+            if len(self.time_sec) > 1 and not np.all(np.diff(self.time_sec) >= 0):
+                logger.warning("时间列非单调递增，缩放/统计可能不准确")
+
             if os.path.exists(excel_path):
                 try:
                     self.lm = LabelMap(excel_path)
@@ -386,6 +390,10 @@ class DataContext:
             self.time_vec = raw.get("TIME", np.array([], dtype='timedelta64[ns]'))
             self.time_sec = time_to_seconds_array(self.time_vec)
             self.source_type = "csv"
+
+            # searchsorted 依赖 time_sec 单调递增，一次性验证
+            if len(self.time_sec) > 1 and not np.all(np.diff(self.time_sec) >= 0):
+                logger.warning("时间列非单调递增，缩放/统计可能不准确")
 
             # CSV 不使用映射表：列名即为标签，无需 LabelMap
             self.lm = None

@@ -154,6 +154,20 @@ class TestConfigLoading:
         assert config.gui == GuiConfig(window_width=1920, window_height=1080)
 
 
+    def test_unknown_key_ignored_not_crash(self):
+        """TOML 中拼写错误的键应被忽略而非导致整个配置回退。"""
+        with tempfile.NamedTemporaryFile(mode="wb", suffix=".toml", delete=False) as f:
+            # typo: min_spam instead of min_span; unknown_key is invalid
+            f.write(b'[zoom]\nmin_spam = 9.0\nfactor_in = 0.5\n[plot]\nunknown_key = 99\n')
+            f.flush()
+            config = load_config(path=Path(f.name))
+        # 有效的 factor_in 应被正确读取
+        assert config.zoom.factor_in == 0.5
+        # 无效的键应被忽略，使用默认值
+        assert config.zoom.min_span == 1.0  # 默认值
+        assert config.plot.y_margin_ratio == 0.05  # 默认值，unknown_key 被忽略
+
+
 # ── TestModuleSingleton ──
 
 
