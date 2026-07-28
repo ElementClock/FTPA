@@ -5,7 +5,7 @@ import threading
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.widgets import Button, RadioButtons, TextBox
-from .time_utils import select_time_window, format_time_seconds
+from .time_utils import format_time_seconds
 from .statistics import find_crossing_points
 from typing import Optional, Callable
 
@@ -50,6 +50,9 @@ def _configure_display_font():
         plt.rcParams['font.family'] = 'sans-serif'
         plt.rcParams['font.sans-serif'] = [selected_font, 'DejaVu Sans', 'Arial']
         plt.rcParams['axes.unicode_minus'] = False
+        # 禁用路径简化，防止 matplotlib 自动丢弃数据点导致失真
+        plt.rcParams['path.simplify'] = False
+        plt.rcParams['path.simplify_threshold'] = 0.0
         _FONT_CACHED = selected_font
         _FONT_CONFIGURED = True
         return selected_font

@@ -1,0 +1,24 @@
+# FTPA 配置文件
+# 取消注释并修改值以覆盖默认参数。
+# 配置文件搜索路径:
+#   1. ~/.ftpa/ftpa_config.toml  (用户级，优先)
+#   2. {项目根目录}/ftpa_config.toml (项目级)
+
+# [zoom]
+# min_span = 1.0          # 最小缩放时间跨度（秒）
+# factor_in = 0.92        # 上滚（放大）缩放因子
+# factor_out = 1.087      # 下滚（缩小）缩放因子
+
+# [plot]
+# y_margin_ratio = 0.05   # Y轴自适应边距比例
+# downsample_threshold = 3000  # 触发降采样的可见点数阈值
+# downsample_target = 1500     # 降采样目标点数
+
+# [data]
+# trim_head = 50          # 文件头部裁剪行数
+# trim_tail = 50          # 文件尾部裁剪行数
+# cache_max_size = 5      # 文件缓存最大条目数
+
+# [gui]
+# window_width = 1400     # 默认窗口宽度（像素）
+# window_height = 860     # 默认窗口高度（像素）

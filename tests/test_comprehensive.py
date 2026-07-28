@@ -107,8 +107,8 @@ def test_time_utils():
     ])
     
     # 测试 select_time_window
-    idx, start, end = select_time_window(time_data, 1, 3)
-    assert np.sum(idx) == 3  # 包含 1, 2, 3 秒
+    i_start, i_end, start, end = select_time_window(time_data, 1, 3)
+    assert i_end - i_start + 1 == 3  # 包含 1, 2, 3 秒
     assert start == 1.0
     assert end == 3.0
     print("[PASS] select_time_window 测试通过")

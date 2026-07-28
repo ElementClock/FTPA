@@ -70,8 +70,9 @@ def select_time_window(time_vec, t_start, t_end):
         t_end: 结束时间（同上）
 
     返回:
-        (idx, t_start_actual, t_end_actual):
-        - idx: 布尔索引数组，指示窗口内的数据点
+        (i_start, i_end, t_start_actual, t_end_actual):
+        - i_start: 窗口起始索引（含），用于 data[i_start:i_end+1] 切片
+        - i_end: 窗口结束索引（含），用于 data[i_start:i_end+1] 切片
         - t_start_actual: 实际起始时间（TIME 中离 t_start 最近的点）
         - t_end_actual: 实际结束时间（TIME 中离 t_end 最近的点）
     """
@@ -80,23 +81,34 @@ def select_time_window(time_vec, t_start, t_end):
     t_start_sec = parse_time_to_seconds(t_start)
     t_end_sec = parse_time_to_seconds(t_end)
 
-    # 找到最近的索引
-    i_start = np.argmin(np.abs(time_sec - t_start_sec))
-    i_end = np.argmin(np.abs(time_sec - t_end_sec))
+    n = len(time_sec)
+
+    # 空数组防御：searchsorted 对空数组返回 0，后续索引会越界
+    if n == 0:
+        return 0, 0, 0.0, 0.0
+
+    # O(log N) 查找：先用 searchsorted 定位插入点，再调整到最近点
+    i_start = int(np.searchsorted(time_sec, t_start_sec, side="left"))
+    if i_start >= n:
+        i_start = n - 1
+    elif i_start > 0 and (t_start_sec - time_sec[i_start - 1]) <= (time_sec[i_start] - t_start_sec):
+        i_start -= 1
+
+    i_end = int(np.searchsorted(time_sec, t_end_sec, side="left"))
+    if i_end >= n:
+        i_end = n - 1
+    elif i_end > 0 and (t_end_sec - time_sec[i_end - 1]) <= (time_sec[i_end] - t_end_sec):
+        i_end -= 1
 
     # 保证起始索引小于等于结束索引
     if i_start > i_end:
         i_start, i_end = i_end, i_start
 
-    # 构建布尔索引
-    idx = np.zeros(len(time_vec), dtype=bool)
-    idx[i_start:i_end + 1] = True
-
     # 返回实际起止时间（数值秒）
-    t_start_actual = time_sec[i_start]
-    t_end_actual = time_sec[i_end]
+    t_start_actual = float(time_sec[i_start])
+    t_end_actual = float(time_sec[i_end])
 
-    return idx, t_start_actual, t_end_actual
+    return i_start, i_end, t_start_actual, t_end_actual
 
 
 def format_time_seconds(t_sec: float) -> str:

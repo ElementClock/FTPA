@@ -219,14 +219,53 @@ class TestTimeUtils:
     def test_select_time_window(self):
         """测试时间窗口选择"""
         time_vec = np.arange(100, dtype='timedelta64[s]')
-        idx, start, end = select_time_window(time_vec, 10, 20)
+        i_start, i_end, start, end = select_time_window(time_vec, 10, 20)
         assert start == 10
         assert end == 20
-        assert len(idx) == 100
-        assert np.sum(idx) == 11  # 包含 10 到 20
+        assert i_start == 10
+        assert i_end == 20
+        assert i_end - i_start + 1 == 11  # 包含 10 到 20
+
+    def test_select_time_window_searchsorted_equivalence(self):
+        """验证 searchsorted 实现与 argmin(abs(...)) 完全等价"""
+        from ftpa.time_utils import select_time_window
+        time_vec = np.arange(200) * np.timedelta64(500, 'ms')
+
+        # 精确匹配
+        i_start, i_end, start, end = select_time_window(time_vec, 10, 50)
+        assert i_start == 20
+        assert i_end == 100
+
+        # 非精确匹配 — 选最近点
+        i_start, i_end, start, end = select_time_window(time_vec, 10.3, 50.7)
+        assert i_start == 21
+
+        # 超出左边界
+        i_start, i_end, start, end = select_time_window(time_vec, -5, 10)
+        assert i_start == 0
+
+        # 超出右边界
+        i_start, i_end, start, end = select_time_window(time_vec, 90, 200)
+        assert i_end == 199
+
+        # 逆序输入
+        i_start, i_end, start, end = select_time_window(time_vec, 50, 10)
+        assert i_start <= i_end
+        assert start == 10.0
+        assert end == 50.0
 
 
 # ============================================================================
+    def test_select_time_window_empty_array(self):
+        """空时间数组不应崩溃（Critical 修复验证）。"""
+        time_vec = np.array([], dtype='timedelta64[s]')
+        i_start, i_end, start, end = select_time_window(time_vec, 0, 10)
+        assert i_start == 0
+        assert i_end == 0
+        assert start == 0.0
+        assert end == 0.0
+
+
 # computing.py 测试
 # ============================================================================
 
@@ -434,7 +473,7 @@ class TestIntegration:
         
         # 4. 时间窗口选择
         # 注意：param_extract 默认截取前50行和后50行，所以数据从50秒开始
-        idx, start, end = select_time_window(time_vec, 60, 70)
+        i_start, i_end, start, end = select_time_window(time_vec, 60, 70)
         assert start == 60
         assert end == 70
 

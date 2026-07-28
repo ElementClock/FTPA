@@ -359,8 +359,11 @@ def _dataframe_to_dict(df: pd.DataFrame, preserve_names: bool = True) -> dict:
                     else:
                         base_time = parsed.iloc[0]
                         data['TIME'] = (parsed - base_time).values.astype('timedelta64[ns]')
+            except ValueError as e:
+                logger.warning("TIME 列时间解析失败: %s", e)
+                data['TIME'] = np.array([], dtype='timedelta64[ns]')
             except Exception as e:
-                logger.warning("TIME 列转换失败: %s", e)
+                logger.warning("TIME 列转换失败（未知原因）: %s", e, exc_info=True)
                 data['TIME'] = np.array([], dtype='timedelta64[ns]')
         else:
             data['TIME'] = np.array([], dtype='timedelta64[ns]')

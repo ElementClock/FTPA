@@ -39,6 +39,8 @@ from .pipeline import (
     stats_analysis,
     DEFAULT_SIGNAL_IDS,
 )
+from .config import Config, CONFIG
+from .errors import FtpaError, LoadError, FileNotFoundLoadError, FormatLoadError, ResourceLoadError, LabelMapLoadError
 
 __all__ = [
     # Data loading
@@ -81,4 +83,14 @@ __all__ = [
     'interactive_view',
     'stats_analysis',
     'DEFAULT_SIGNAL_IDS',
+    # Config
+    'Config',
+    'CONFIG',
+    # Errors
+    'FtpaError',
+    'LoadError',
+    'FileNotFoundLoadError',
+    'FormatLoadError',
+    'ResourceLoadError',
+    'LabelMapLoadError',
 ]

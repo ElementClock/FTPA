@@ -111,9 +111,9 @@ class TrackPanel(QWidget):
         t_start, t_end = self.track_time.get_time_range()
         if t_start is not None and t_end is not None and self.ctx.time_sec is not None:
             from ..time_utils import select_time_window
-            idx, _, _ = select_time_window(self.ctx.time_sec, t_start, t_end)
-            lat_arr = np.asarray(lat, dtype=float)[idx]
-            lon_arr = np.asarray(lon, dtype=float)[idx]
+            i_start, i_end, _, _ = select_time_window(self.ctx.time_sec, t_start, t_end)
+            lat_arr = np.asarray(lat, dtype=float)[i_start:i_end + 1]
+            lon_arr = np.asarray(lon, dtype=float)[i_start:i_end + 1]
         else:
             lat_arr = np.asarray(lat, dtype=float)
             lon_arr = np.asarray(lon, dtype=float)

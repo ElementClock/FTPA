@@ -10,6 +10,8 @@ import threading
 from collections import OrderedDict
 from typing import Any
 
+from ..config import CONFIG
+
 
 class FileCache:
     """线程安全的 LRU 文件数据缓存。
@@ -20,12 +22,14 @@ class FileCache:
     - hits / misses 计数器用于调试和性能监控
     """
 
-    def __init__(self, max_size: int = 5, check_mtime: bool = True):
+    def __init__(self, max_size: int | None = None, check_mtime: bool = True):
         """
         参数:
             max_size: 最大缓存条目数（默认 5，对应约 5 个文件的数据字典）
             check_mtime: 是否在 get 时检查文件修改时间（默认 True）
         """
+        if max_size is None:
+            max_size = CONFIG.data.cache_max_size
         self._cache: OrderedDict[str, Any] = OrderedDict()
         self._lock = threading.Lock()
         self._max_size = max_size
