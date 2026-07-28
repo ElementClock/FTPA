@@ -575,7 +575,7 @@ class CrossingAnalyzer:
                 seg = arr[i_start:i_end]
                 if len(seg) > 0:
                     label = w.ctx.get_label(f)
-                    lines.append(f"  {label}: min={np.min(seg):.4g}, max={np.max(seg):.4g}, mean={np.mean(seg):.4g}")
+                    lines.append(f"  {label}: min={np.nanmin(seg):.4g}, max={np.nanmax(seg):.4g}, mean={np.nanmean(seg):.4g}")
 
         # 穿越信息
         for side, (val, mode) in [("左", (self.left_val, self.left_mode)),

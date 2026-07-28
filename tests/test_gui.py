@@ -23,6 +23,31 @@ class TestDataContext:
         result = DataContext.resolve_path(str(f))
         assert os.path.samefile(result, str(f))
 
+    def test_resolve_path_traversal_rejected(self):
+        """路径遍历（..）应被拒绝，返回 default。"""
+        result = DataContext.resolve_path("../secret.txt", default="blocked")
+        assert result == "blocked"
+
+    def test_resolve_path_traversal_nested_rejected(self):
+        """嵌套路径遍历（foo/../../etc/passwd）应被拒绝。"""
+        result = DataContext.resolve_path("foo/../../etc/passwd", default="blocked")
+        assert result == "blocked"
+
+    def test_resolve_path_no_matlab_in_search_dirs(self):
+        """DATA_DIRS 不应包含 matlab/ 目录。"""
+        from ftpa.gui.services import DATA_DIRS
+        dir_strs = [str(d) for d in DATA_DIRS]
+        assert not any("matlab" in s for s in dir_strs)
+
+    def test_resolve_path_no_project_root_in_search_dirs(self):
+        """DATA_DIRS 不应包含项目根目录（应使用 data/testdata 子目录）。"""
+        from ftpa.gui.services import DATA_DIRS
+        # 项目根目录是 DATA_DIRS 的父级，不应直接出现在列表中
+        # 检查：每个 DATA_DIRS 条目都应在 data/ 或 testdata/ 下
+        for d in DATA_DIRS:
+            d_str = str(d)
+            assert "data" in d_str or "testdata" in d_str
+
     def test_resolve_path_empty_returns_default(self):
         """空路径返回默认值。"""
         result = DataContext.resolve_path("", default="fallback")
@@ -1164,6 +1189,74 @@ class TestCrossingAnalyzerUpdateStats:
         # 应有时间窗口行，但不应有 sig1 的统计行
         assert "时间窗口:" in analyzer.last_stats_text
         assert "sig1" not in analyzer.last_stats_text
+
+    def test_stats_with_nan_values_excludes_nan(self):
+        """含 NaN 的数据段应在统计中排除 NaN，返回有效值的 min/max/mean。"""
+        time_sec = np.array([0.0, 10.0, 20.0, 30.0, 40.0])
+        sig_data = np.array([np.nan, 3.0, 5.0, 7.0, np.nan])  # 有效值: 3, 5, 7
+
+        analyzer, widget = self._make_analyzer_with_stats(
+            n_axes=1,
+            fields_per_subplot={0: ["sig1"]},
+            time_sec=time_sec,
+            data_map={"sig1": sig_data},
+            xlim=(0.0, 40.0),
+        )
+
+        analyzer.update_stats()
+
+        lines = analyzer.last_stats_text.split("\n")
+        sig_line = [l for l in lines if "sig1" in l][0]
+        # 排除 NaN 后: min=3, max=7, mean=5
+        assert "min=3" in sig_line
+        assert "max=7" in sig_line
+        assert "mean=5" in sig_line
+        # 不应出现 NaN 字符串
+        assert "nan" not in sig_line.lower()
+
+    def test_stats_with_nan_at_boundaries(self):
+        """NaN 仅在数据段边界时统计应基于中间有效值。"""
+        time_sec = np.array([0.0, 10.0, 20.0, 30.0, 40.0])
+        sig_data = np.array([np.nan, 10.0, 20.0, 30.0, np.nan])  # 有效值: 10, 20, 30
+
+        analyzer, widget = self._make_analyzer_with_stats(
+            n_axes=1,
+            fields_per_subplot={0: ["sig1"]},
+            time_sec=time_sec,
+            data_map={"sig1": sig_data},
+            xlim=(0.0, 40.0),
+        )
+
+        analyzer.update_stats()
+
+        lines = analyzer.last_stats_text.split("\n")
+        sig_line = [l for l in lines if "sig1" in l][0]
+        # 排除 NaN 后: min=10, max=30, mean=20
+        assert "min=10" in sig_line
+        assert "max=30" in sig_line
+        assert "mean=20" in sig_line
+
+    def test_stats_all_nan_does_not_crash(self):
+        """全为 NaN 的数据段不应导致崩溃（np.nanmin 全 NaN 会产生 RuntimeWarning 但返回 nan）。"""
+        time_sec = np.array([0.0, 10.0, 20.0])
+        sig_data = np.array([np.nan, np.nan, np.nan])
+
+        analyzer, widget = self._make_analyzer_with_stats(
+            n_axes=1,
+            fields_per_subplot={0: ["sig1"]},
+            time_sec=time_sec,
+            data_map={"sig1": sig_data},
+            xlim=(0.0, 20.0),
+        )
+
+        # 不应抛出异常
+        import warnings
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", RuntimeWarning)
+            analyzer.update_stats()
+
+        # 应仍有输出（含 sig1 行），即使值为 nan
+        assert "sig1" in analyzer.last_stats_text
 
 
 # ============================================================================
