@@ -465,7 +465,7 @@ class MainWindow(QMainWindow):
                     old_thread.quit()
                     old_thread.wait(3000)
             except RuntimeError:
-                logger.debug("旧加载线程清理失败", exc_info=True)
+                logger.warning("旧加载线程清理失败", exc_info=True)
             old_thread = None
 
         self.status_bar.showMessage("加载中...")
@@ -482,7 +482,7 @@ class MainWindow(QMainWindow):
             if self.data_context is not None:
                 self.data_context.unload()
         except Exception:
-            logger.debug("卸载数据失败", exc_info=True)
+            logger.warning("卸载数据失败", exc_info=True)
         self.data_context = None
         self.plot_widget.clear_data_context()
         self.param_tree.clear_params()
@@ -517,13 +517,13 @@ class MainWindow(QMainWindow):
         self.data_context = ctx
 
         # 验证加载状态
-        if not ctx.is_loaded or not ctx.data:
+        if not ctx.is_loaded or not ctx.query.has_data():
             QMessageBox.critical(self, "数据无效", "数据加载后为空，请检查文件格式。")
             return
 
         # 记住上次成功加载的数据文件目录
         settings = QSettings("FTPA", "FTPA")
-        settings.setValue("last_data_dir", os.path.dirname(ctx.data_path))
+        settings.setValue("last_data_dir", os.path.dirname(ctx.query.get_data_path()))
 
         # 重置子图（不自动填充默认信号）
         self.plot_widget.subplot_fields = {i: [] for i in range(len(self.plot_widget.axes))}
@@ -544,12 +544,12 @@ class MainWindow(QMainWindow):
         # 状态栏和信息
         self.status_bar.showMessage(
             f"已加载: {ctx.get_row_count()} 行, {ctx.get_column_count()} 列")
-        self._append_log(f"数据加载完成: {ctx.data_path}")
+        self._append_log(f"数据加载完成: {ctx.query.get_data_path()}")
         self._append_log(f"行数: {ctx.get_row_count()}, 信号数: {len(ctx.get_field_names())}")
 
         # 更新信息显示
         info_lines = [
-            f"数据文件: {ctx.data_path}",
+            f"数据文件: {ctx.query.get_data_path()}",
             f"行数: {ctx.get_row_count()}, 列数: {ctx.get_column_count()}",
             f"时间范围: {ctx.get_time_range_sec()[0]:.1f}s - {ctx.get_time_range_sec()[1]:.1f}s",
             f"信号数量: {len(ctx.get_field_names())}",
@@ -613,7 +613,7 @@ class MainWindow(QMainWindow):
             self.apply_btn.setEnabled(False)
 
             analyzer = SystemAnalyzer()
-            results = analyzer.analyze(self.data_context.data, self.data_context.source_type)
+            results = analyzer.analyze(self.data_context.data, self.data_context.query.get_source_type())
             reports = analyzer.generate_reports(results)
 
             # 保存结果到 DataContext
@@ -650,7 +650,7 @@ class MainWindow(QMainWindow):
             settings = QSettings("FTPA", "FTPA")
             settings.setValue("splitter_sizes", self._splitter.sizes())
         except Exception:
-            logger.debug("QSettings 保存失败", exc_info=True)
+            logger.warning("QSettings 保存失败", exc_info=True)
 
         # 停止数据加载线程
         thread = getattr(self, '_load_thread', None)
@@ -660,7 +660,7 @@ class MainWindow(QMainWindow):
                     thread.quit()
                     thread.wait(3000)
             except RuntimeError:
-                logger.debug("加载线程清理失败", exc_info=True)
+                logger.warning("加载线程清理失败", exc_info=True)
             self._load_thread = None
 
         # 清空数据上下文，释放 numpy 数组内存
@@ -668,7 +668,7 @@ class MainWindow(QMainWindow):
             try:
                 self.data_context.unload()
             except Exception:
-                logger.debug("数据卸载失败", exc_info=True)
+                logger.warning("数据卸载失败", exc_info=True)
             self.data_context = None
 
         # 显式清理 matplotlib canvas，避免 Qt 退出时释放顺序冲突
@@ -677,7 +677,7 @@ class MainWindow(QMainWindow):
             if hasattr(self.plot_widget, 'canvas'):
                 self.plot_widget.canvas.close()
         except Exception:
-            logger.debug("Canvas 清理失败", exc_info=True)
+            logger.warning("Canvas 清理失败", exc_info=True)
 
         event.accept()
 

@@ -32,9 +32,11 @@ def _make_widget_mock(n_axes=2, time_sec=None, xlim_list=None):
     if time_sec is not None:
         ctx = MagicMock()
         ctx.time_sec = time_sec
+        ctx.query.get_time_sec.return_value = time_sec
     else:
         ctx = MagicMock()
         ctx.time_sec = np.array([0.0, 50.0, 100.0])
+        ctx.query.get_time_sec.return_value = np.array([0.0, 50.0, 100.0])
     widget.ctx = ctx
 
     # canvas mock
@@ -114,6 +116,7 @@ class TestRegionControllerStateMachine:
         """无数据时右键按下应被忽略。"""
         widget = _make_widget_mock(time_sec=None)
         widget.ctx.time_sec = None
+        widget.ctx.query.get_time_sec.return_value = None
         ctrl = RegionController(widget)
 
         event = _make_event(button=3, xdata=30.0, inaxes=widget.axes[0])

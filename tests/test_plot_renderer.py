@@ -32,6 +32,9 @@ def mock_widget():
     w.ctx.get_label = lambda f: f"标签_{f}"
     w.ctx.data = {"ALT": np.array([1.0, 2.0, 3.0])}
     w.ctx.time_sec = np.array([0.0, 1.0, 2.0])
+    # DataQueryService mock
+    w.ctx.query.get_signal_data.side_effect = lambda f: w.ctx.data.get(f)
+    w.ctx.query.get_time_sec.return_value = w.ctx.time_sec
     w.axes = [MagicMock(), MagicMock()]
     return w
 

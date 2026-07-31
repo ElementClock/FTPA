@@ -2,7 +2,7 @@
 测试 column_config 模块
 """
 
-from ftpa.column_config import get_replacement_rules, apply_replacement_rules
+from ftpa.data.column_config import get_replacement_rules, apply_replacement_rules
 
 
 class TestReplacementRules:

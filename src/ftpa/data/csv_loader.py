@@ -22,9 +22,9 @@ from typing import Optional
 import numpy as np
 import pandas as pd
 
-from ..column_config import get_replacement_rules
+from .column_config import get_replacement_rules
 from ..config import CONFIG
-from ..constants import TRIM_HEAD, TRIM_TAIL, CHUNK_SIZE
+from ..data import CHUNK_SIZE
 from ..utils.strings import column_to_field_name
 from ..utils.file_utils import detect_encoding
 from .cache import _file_cache
@@ -40,7 +40,6 @@ def csv_param_extract(
     filename: str,
     encoding: Optional[str] = None,
     filter_reliable: bool = True,
-    apply_name_rules: bool = False,
 ) -> dict:
     """从 CSV 飞参数据文件提取所有列到字典。
 
@@ -55,8 +54,6 @@ def csv_param_extract(
         filename: CSV 文件路径。
         encoding: 文件编码，None 时自动检测。
         filter_reliable: 是否过滤标识符 != 1 的行（默认 True）。
-        apply_name_rules: 是否应用 ATA 列名替换规则（默认 False，
-            保持原始列名不变）。
 
     Returns:
         dict，键为字段名，值为 numpy 数组。
@@ -82,21 +79,14 @@ def csv_param_extract(
     # 3. 时间处理：合并第 4/5/6 列为北京时间 datetime
     df = _convert_flight_time(df, filter_reliable=filter_reliable)
 
-    # 4. 列名替换规则
-    name_mapping: dict[str, str] = {}
-    if apply_name_rules:
-        df, name_mapping = _convert_flight_name(df)
+    # 4. 转换为 dict[str, np.ndarray]（与 param_extract 格式一致）
+    #    preserve_names=True: 保留原始列名，不做 label 变换
+    data = _dataframe_to_dict(df, preserve_names=True)
 
-    # 5. 转换为 dict[str, np.ndarray]（与 param_extract 格式一致）
-    #    preserve_names=True: 保留原始列名，不做 label 变换（默认行为）
-    data = _dataframe_to_dict(df, preserve_names=not apply_name_rules)
-
-    # 6. 附加元数据
+    # 5. 附加元数据
     data['filename'] = abs_file
-    if name_mapping:
-        data['_name_mapping'] = name_mapping
 
-    # 7. 存入缓存
+    # 6. 存入缓存
     _file_cache.set(abs_file, data)
 
     return data

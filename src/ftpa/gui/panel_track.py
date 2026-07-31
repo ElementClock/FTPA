@@ -102,16 +102,17 @@ class TrackPanel(QWidget):
             return
         lat_field = self.lat_combo.currentText()
         lon_field = self.lon_combo.currentText()
-        lat = self.ctx.data.get(lat_field)
-        lon = self.ctx.data.get(lon_field)
+        lat = self.ctx.query.get_signal_data(lat_field)
+        lon = self.ctx.query.get_signal_data(lon_field)
         if lat is None or lon is None or len(lat) < 2:
             self.result_text.setPlainText("经纬度数据不足")
             return
 
         t_start, t_end = self.track_time.get_time_range()
-        if t_start is not None and t_end is not None and self.ctx.time_sec is not None:
-            from ..time_utils import select_time_window
-            i_start, i_end, _, _ = select_time_window(self.ctx.time_sec, t_start, t_end)
+        time_sec = self.ctx.query.get_time_sec()
+        if t_start is not None and t_end is not None and time_sec is not None:
+            from ..utils.time_utils import select_time_window
+            i_start, i_end, _, _ = select_time_window(time_sec, t_start, t_end)
             lat_arr = np.asarray(lat, dtype=float)[i_start:i_end + 1]
             lon_arr = np.asarray(lon, dtype=float)[i_start:i_end + 1]
         else:
@@ -147,8 +148,8 @@ class TrackPanel(QWidget):
         t_start, t_end = self.track_time.get_time_range()
         try:
             R = compute_fitted_circle_radius(
-                self.ctx.time_vec, t_start or "", t_end or "",
-                self.ctx.data[lat_field], self.ctx.data[lon_field]
+                self.ctx.query.get_time_vec(), t_start or "", t_end or "",
+                self.ctx.query.get_signal_data(lat_field), self.ctx.query.get_signal_data(lon_field)
             )
             if np.isnan(R):
                 self.result_text.setPlainText("拟合圆半径: 数据不足（需要至少3个点）")

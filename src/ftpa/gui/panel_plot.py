@@ -37,7 +37,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ..plotting import _configure_display_font
+from ._font_config import configure_display_font
 from .services import DataContext
 from ._layout_ctrl import LayoutController
 from ._plot_renderer import PlotRenderer
@@ -87,8 +87,8 @@ class PlotCanvasWidget(QWidget):
         # 子图选择
         self._selected_subplot_idx: int | None = None
 
-        # 首次调用时扫描字体（_configure_display_font 是惰性的）
-        _configure_display_font()
+        # 首次调用时扫描字体（惰性配置）
+        configure_display_font()
 
         # 创建内部控制器
         self._layout = LayoutController(self)
@@ -184,7 +184,7 @@ class PlotCanvasWidget(QWidget):
 
         # 光标样式：仅在非拖拽状态下且样式实际变化时更新
         if not self._pan.is_panning():
-            has_data = self.ctx is not None and self.ctx.time_sec is not None and len(self.ctx.time_sec) > 0
+            has_data = self.ctx is not None and self.ctx.query.get_time_sec() is not None and len(self.ctx.query.get_time_sec()) > 0
             want_cursor = (Qt.CursorShape.OpenHandCursor
                            if event.inaxes is not None and has_data
                            else Qt.CursorShape.ArrowCursor)

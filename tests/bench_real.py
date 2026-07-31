@@ -46,7 +46,11 @@ def main():
     clear_cache()
     ctx = DataContext()
     t0 = time.perf_counter()
-    ok, msg = ctx.load(data_path, excel_path)
+    try:
+        ctx.load(data_path, excel_path)
+        ok = True
+    except Exception:
+        ok = False
     t1 = time.perf_counter()
     full = t1 - t0
     print(f'[完整]   DataContext.load(): {full:.3f}s (ok={ok})')

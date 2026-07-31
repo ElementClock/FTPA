@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 
 from matplotlib.ticker import FuncFormatter
 
-from ..time_utils import format_time_seconds
+from ..utils.time_utils import format_time_seconds
 from ..config import CONFIG
 
 if TYPE_CHECKING:
@@ -34,13 +34,13 @@ class LayoutController:
     }
 
     def __init__(self, widget: PlotCanvasWidget) -> None:
-        self.w = widget
+        self._widget = widget
 
     # ── 布局切换 ──
 
     def switch_layout(self, mode: str) -> None:
         """切换子图布局模式（原子操作）。"""
-        w = self.w
+        w = self._widget
         if mode == w._layout_mode:
             return
         if mode not in self.LAYOUT_CONFIG:
@@ -100,7 +100,7 @@ class LayoutController:
 
     def _create_axes_for_mode(self, mode: str) -> None:
         """根据布局模式创建子图轴并绘制信号（供 switch_layout 和 rebuild_axes_for_mode 复用）。"""
-        w = self.w
+        w = self._widget
         w.figure.clear()
         w.axes = []
         w._renderer.invalidate_cache()
@@ -145,7 +145,7 @@ class LayoutController:
 
     def _apply_bottom_axis_labels(self, mode: str) -> None:
         """为布局模式的底部子图设置 X 轴标签，并为所有子图设置时间格式化器。"""
-        w = self.w
+        w = self._widget
         bottom_indices: list[int] = []
 
         if mode == "1x1":
@@ -167,7 +167,7 @@ class LayoutController:
 
     def rebuild_axes_for_mode(self) -> None:
         """根据当前布局模式创建空子图轴（仅在初始化时调用）。"""
-        w = self.w
+        w = self._widget
         w.figure.clear()
         w.axes = []
         w._renderer.invalidate_cache()
@@ -195,7 +195,7 @@ class LayoutController:
 
     def apply_spine_color(self) -> None:
         """应用子图边框颜色（选中=蓝色，未选中=浅灰）。"""
-        w = self.w
+        w = self._widget
         for i, ax in enumerate(w.axes):
             for spine in ax.spines.values():
                 if w._selected_subplot_idx == i:
@@ -212,7 +212,7 @@ class LayoutController:
 
         拖拽悬停子图显示绿色虚线，选中子图保持蓝色实线，其余浅灰。
         """
-        w = self.w
+        w = self._widget
         for i, ax in enumerate(w.axes):
             for spine in ax.spines.values():
                 if i == hover_idx:
@@ -235,7 +235,7 @@ class LayoutController:
     def clear_drag_highlight(self) -> None:
         """清除拖拽悬停高亮，恢复原始边框样式。"""
         self.apply_spine_color()
-        self.w.canvas.draw_idle()
+        self._widget.canvas.draw_idle()
 
     # ── 子图选择 ──
 
@@ -246,7 +246,7 @@ class LayoutController:
         注意：此方法仅在非平移（was_panning=False）时被调用，
         因此无需区分点击/拖拽。
         """
-        w = self.w
+        w = self._widget
         if event.button == 1:  # 左键
             if event.inaxes is not None:
                 for i, ax in enumerate(w.axes):
@@ -258,7 +258,7 @@ class LayoutController:
 
     def select_subplot(self, idx: int) -> None:
         """选中子图并通知外部。"""
-        w = self.w
+        w = self._widget
         if idx == w._selected_subplot_idx:
             return
         w._selected_subplot_idx = idx
@@ -268,7 +268,7 @@ class LayoutController:
 
     def deselect_subplot(self) -> None:
         """取消选中子图。"""
-        w = self.w
+        w = self._widget
         if w._selected_subplot_idx is None:
             return
         w._selected_subplot_idx = None
@@ -278,8 +278,8 @@ class LayoutController:
 
     def get_selected_subplot(self) -> int | None:
         """获取当前选中的子图索引。"""
-        return self.w._selected_subplot_idx
+        return self._widget._selected_subplot_idx
 
     def get_layout_mode(self) -> str:
         """获取当前布局模式。"""
-        return self.w._layout_mode
+        return self._widget._layout_mode

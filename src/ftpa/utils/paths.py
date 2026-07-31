@@ -5,7 +5,7 @@
 
 import os
 from pathlib import Path
-from ..constants import EXCEL_FILENAME
+from ..data import EXCEL_FILENAME
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]  # src/ftpa/utils/ → 项目根目录

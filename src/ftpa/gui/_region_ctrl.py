@@ -26,7 +26,7 @@ from typing import TYPE_CHECKING
 
 from PySide6.QtCore import Qt
 
-from ..time_utils import format_time_seconds
+from ..utils.time_utils import format_time_seconds
 from ..config import CONFIG
 
 if TYPE_CHECKING:
@@ -57,7 +57,7 @@ class RegionController:
     DRAG_THRESHOLD: int = 5
 
     def __init__(self, widget: PlotCanvasWidget) -> None:
-        self.w = widget
+        self._widget = widget
 
         # 状态
         self._state: str = self.IDLE
@@ -86,8 +86,8 @@ class RegionController:
             return
 
         # 无数据时禁止框选
-        w = self.w
-        if w.ctx is None or w.ctx.time_sec is None or len(w.ctx.time_sec) == 0:
+        w = self._widget
+        if w.ctx is None or w.ctx.query.get_time_sec() is None or len(w.ctx.query.get_time_sec()) == 0:
             self._press_event = None
             return
 
@@ -114,7 +114,7 @@ class RegionController:
         if self._state not in (self.PRESSED, self.SELECTING):
             return
 
-        w = self.w
+        w = self._widget
 
         # 判断是否超过拖拽阈值
         if self._state == self.PRESSED:
@@ -172,11 +172,11 @@ class RegionController:
 
             # 最终绘制
             self._draw_region(self._region_start, self._region_end)
-            self.w.canvas.draw_idle()
+            self._widget.canvas.draw_idle()
 
             # 日志
             if self._region_start is not None and self._region_end is not None:
-                self.w.log_message.emit(
+                self._widget.log_message.emit(
                     f"已框选区域: {format_time_seconds(self._region_start)} → "
                     f"{format_time_seconds(self._region_end)}  "
                     f"（点击「应用」按钮执行穿越检测）"
@@ -225,7 +225,7 @@ class RegionController:
             True  — 穿越检测成功，已缩放并自动清除框选
             False — 穿越检测失败，选区保持
         """
-        w = self.w
+        w = self._widget
         region = self.get_region()
         if region is None:
             w.log_message.emit("无有效框选区域")
@@ -264,8 +264,8 @@ class RegionController:
         self._press_event = None
 
         # 恢复光标
-        w = self.w
-        has_data = w.ctx is not None and w.ctx.time_sec is not None and len(w.ctx.time_sec) > 0
+        w = self._widget
+        has_data = w.ctx is not None and w.ctx.query.get_time_sec() is not None and len(w.ctx.query.get_time_sec()) > 0
         # 光标恢复将在 panel_plot._on_motion 中自动处理
         w.canvas.draw_idle()
 
@@ -291,7 +291,7 @@ class RegionController:
           - 顶部时间标注文本
         """
         self._clear_region()
-        w = self.w
+        w = self._widget
 
         if not w.axes:
             return

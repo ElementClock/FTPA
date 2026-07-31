@@ -9,25 +9,29 @@ import os
 import numpy as np
 import pandas as pd
 from ..utils.strings import column_to_field_name
-from ..constants import TRIM_HEAD, TRIM_TAIL
+from ..config import CONFIG
 from .io import read_data_file, resolve_zip_file
 from .cache import _file_cache
 
 logger = logging.getLogger(__name__)
 
 
-def _trim_data(arr, trim_head=TRIM_HEAD, trim_tail=TRIM_TAIL):
+def _trim_data(arr, trim_head=None, trim_tail=None):
     """
     截取数组头尾（与 MATLAB extractColumnEfficient 一致）
 
     参数:
         arr: 输入数组
-        trim_head: 头部截取行数
-        trim_tail: 尾部截取行数
+        trim_head: 头部截取行数（默认取 CONFIG.data.trim_head）
+        trim_tail: 尾部截取行数（默认取 CONFIG.data.trim_tail）
 
     返回:
         截取后的数组；若长度不足则返回空数组
     """
+    if trim_head is None:
+        trim_head = CONFIG.data.trim_head
+    if trim_tail is None:
+        trim_tail = CONFIG.data.trim_tail
     n_total = len(arr)
     n_drop = trim_head + trim_tail
 

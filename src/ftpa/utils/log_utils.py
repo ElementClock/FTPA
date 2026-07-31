@@ -2,7 +2,7 @@
 纯 Python 日志配置工具（零 Qt 依赖）。
 
 用法：
-    from ftpa.log_utils import setup_logging
+    from ftpa.utils.log_utils import setup_logging
     setup_logging(log_file="ftpa.log")
 
 然后在任意模块中：

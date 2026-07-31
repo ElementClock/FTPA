@@ -5,12 +5,15 @@
 
 import os
 import json
+import logging
 import numpy as np
 import pandas as pd
 from typing import Dict, Union, Optional
 from datetime import datetime
-from .time_utils import format_duration_chinese
-from .statistics import generate_data_summary, print_data_summary  # noqa: F401 — re-exports
+from ..utils.time_utils import format_duration_chinese
+from ..statistics import generate_data_summary, print_data_summary  # noqa: F401 — re-exports
+
+logger = logging.getLogger(__name__)
 
 
 def export_data(data: Dict[str, np.ndarray],
@@ -71,12 +74,12 @@ def export_data(data: Dict[str, np.ndarray],
     else:
         raise ValueError(f"不支持的导出格式: {output_format}。支持: csv, parquet, hdf5, excel")
 
-    print(f"数据已导出到: {file_path}")
-    print(f"  格式: {output_format.upper()}")
-    print(f"  行数: {len(df)}")
-    print(f"  列数: {len(df.columns)}")
+    logger.info("数据已导出到: %s", file_path)
+    logger.info("  格式: %s", output_format.upper())
+    logger.info("  行数: %d", len(df))
+    logger.info("  列数: %d", len(df.columns))
     if compression:
-        print(f"  压缩: {compression}")
+        logger.info("  压缩: %s", compression)
 
     return file_path
 
@@ -172,5 +175,5 @@ def export_statistics(stats: Dict, output_path: str, output_format: str = 'csv')
     else:
         raise ValueError(f"不支持的格式: {output_format}。支持: csv, json")
 
-    print(f"统计结果已导出到: {file_path}")
+    logger.info("统计结果已导出到: %s", file_path)
     return file_path

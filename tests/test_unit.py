@@ -15,14 +15,14 @@ import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from ftpa.utils import make_valid_name
-from ftpa.label_map import LabelMap
+from ftpa.data.label_map import LabelMap
 from ftpa.data import (
     extract_column_efficient,
     param_extract,
     extract_time,
 )
 from ftpa.data.io import read_data_file, resolve_zip_file
-from ftpa.time_utils import (
+from ftpa.utils.time_utils import (
     select_time_window,
     format_time_seconds,
     time_to_seconds_array,
@@ -228,7 +228,7 @@ class TestTimeUtils:
 
     def test_select_time_window_searchsorted_equivalence(self):
         """验证 searchsorted 实现与 argmin(abs(...)) 完全等价"""
-        from ftpa.time_utils import select_time_window
+        from ftpa.utils.time_utils import select_time_window
         time_vec = np.arange(200) * np.timedelta64(500, 'ms')
 
         # 精确匹配
@@ -398,9 +398,11 @@ class TestStatistics:
     def test_compute_stat_range(self):
         """测试范围统计"""
         data = np.array([1.0, 2.0, 3.0, 4.0, 5.0])
-        val, desc = compute_stat(data, 'range')
-        assert val == "1 ~ 5"
-        assert desc == '范围'
+        result = compute_stat(data, 'range')
+        assert len(result) == 3
+        assert result[0] == 1.0
+        assert result[1] == 5.0
+        assert result[2] == '范围'
     
     def test_compute_stat_points(self):
         """测试数据点数统计"""

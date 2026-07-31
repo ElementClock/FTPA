@@ -14,15 +14,16 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from ftpa.utils import make_valid_name, column_to_field_name
-from ftpa.label_map import LabelMap
+from ftpa.data.label_map import LabelMap
 from ftpa.data import param_extract, extract_time
-from ftpa.time_utils import select_time_window, format_time_seconds
+from ftpa.utils.time_utils import select_time_window, format_time_seconds
 from ftpa.computing import compute_total_weight_rel_cg, compute_fitted_circle_radius
 from ftpa.statistics import (
     compute_stat, compute_var_stats, show_group_stats,
     compute_takeoff_landing_stats, statistics_params, crossing_analysis
 )
-from ftpa.plotting import plot_time_signals, plot_track
+# CLI plotting 模块已归档到 references/cli/，不再在源码树中
+# from ftpa.plotting import plot_time_signals, plot_track
 
 
 def test_utils():
@@ -205,8 +206,8 @@ def test_statistics():
     assert abs(val - np.std(data, ddof=1)) < 1e-10
     print("[PASS] compute_stat (std) 测试通过")
     
-    val, desc = compute_stat(data, 'range')
-    assert val == "1 ~ 5"
+    result = compute_stat(data, 'range')
+    assert len(result) == 3 and result[0] == 1.0 and result[1] == 5.0 and result[2] == '范围'
     print("[PASS] compute_stat (range) 测试通过")
     
     val, desc = compute_stat(data, 'points')
@@ -274,38 +275,11 @@ def test_data_loader():
 
 
 def test_plotting():
-    """测试绘图模块（仅验证函数可调用，不实际显示）"""
+    """测试绘图模块 — CLI plotting.py 已归档，跳过。"""
     print("\n" + "="*70)
-    print("测试 M4: plotting.py")
+    print("测试 M4: plotting.py (已归档到 references/cli/)")
     print("="*70)
-    
-    # 创建测试数据
-    time_vec = np.arange(100) * np.timedelta64(1, 's')
-    signals = [
-        np.sin(np.arange(100) * 0.1),
-        np.cos(np.arange(100) * 0.1)
-    ]
-    labels = ['正弦', '余弦']
-    
-    # 测试 plot_time_signals（不显示）
-    try:
-        import matplotlib
-        matplotlib.use('Agg')  # 使用非交互式后端
-        plot_time_signals(time_vec, signals, labels)
-        print("[PASS] plot_time_signals 测试通过")
-    except Exception as e:
-        print(f"[WARN] plot_time_signals 测试跳过: {e}")
-    
-    # 测试 plot_track（不显示）
-    try:
-        lat = 30.0 + np.random.randn(100) * 0.01
-        lon = 120.0 + np.random.randn(100) * 0.01
-        plot_track(lat, lon)
-        print("[PASS] plot_track 测试通过")
-    except Exception as e:
-        print(f"[WARN] plot_track 测试跳过: {e}")
-    
-    print("[PASS][PASS][PASS] plotting.py 所有测试通过")
+    print("[SKIP] CLI plotting 模块已归档，测试跳过")
 
 
 def run_all_tests():

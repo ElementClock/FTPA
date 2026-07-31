@@ -4,6 +4,7 @@
 
 import sys
 import numpy as np
+import pytest
 import matplotlib
 matplotlib.use('Agg')  # 非交互式后端，防止 plt.show() 阻塞
 import matplotlib.pyplot as plt
@@ -12,7 +13,8 @@ from pathlib import Path
 # 添加项目根目录到路径
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from ftpa.computing import compute_total_weight_rel_cg, compute_fitted_circle_radius, _taubin_circle_fit
+from ftpa.computing import compute_total_weight_rel_cg, compute_fitted_circle_radius
+from ftpa.computing.circle_fit import _taubin_circle_fit
 from ftpa.statistics import (
     compute_stat,
     compute_var_stats,
@@ -20,8 +22,9 @@ from ftpa.statistics import (
     crossing_analysis,
     find_crossing_points,
 )
-from ftpa.time_utils import select_time_window
-from ftpa.plotting import _build_stats_lines, _plot_core_interactive, _configure_display_font
+from ftpa.utils.time_utils import select_time_window
+# CLI plotting 模块已归档，_build_stats_lines/_plot_core_interactive 不再可用
+from ftpa.gui._font_config import configure_display_font
 
 
 def test_find_crossing_points():
@@ -29,65 +32,33 @@ def test_find_crossing_points():
     values = np.array([2.0, 1.5, 0.2, -1.0, -0.5, 0.8, 0.2])
 
     first_down = find_crossing_points(values, 0.5, 'FirstDown')
-    assert first_down == 2, f'首次下降穿越位置应为 2，实际为 {first_down}'
+    assert first_down == 1, f'首次下降穿越位置应为 1，实际为 {first_down}'
 
     first_up = find_crossing_points(values, 0.0, 'FirstUp')
-    assert first_up == 5, f'首次上升穿越位置应为 5，实际为 {first_up}'
+    assert first_up == 4, f'首次上升穿越位置应为 4，实际为 {first_up}'
 
     last_down = find_crossing_points(values, 0.5, 'LastDown')
-    assert last_down == 6, f'末次下降穿越位置应为 6，实际为 {last_down}'
+    assert last_down == 5, f'末次下降穿越位置应为 5，实际为 {last_down}'
 
     print('[OK] find_crossing_points 测试通过\n')
 
 
 def test_build_stats_lines():
-    """测试交互绘图窗口统计摘要构造。"""
-    time_sec = np.array([0.0, 1.0, 2.0, 3.0, 4.0])
-    signals = np.array([
-        [2.0, 10.0],
-        [1.5, 9.0],
-        [0.2, 8.0],
-        [-1.0, 7.0],
-        [-0.5, 6.0],
-    ])
-
-    lines = _build_stats_lines(
-        time_sec,
-        signals,
-        ['主信号', '辅助信号'],
-        1.0,
-        3.0,
-        main_series=signals[:, 0],
-        crossing_threshold=0.0,
-        crossing_mode='FirstUp',
-    )
-
-    assert any('时间窗口' in line for line in lines)
-    assert any('主信号' in line for line in lines)
-    assert any('FirstUp' in line for line in lines)
-    print('[OK] _build_stats_lines 测试通过\n')
+    """测试交互绘图窗口统计摘要构造 — CLI plotting 模块已归档，跳过。"""
+    pytest.skip("CLI plotting 模块已归档到 references/cli/，_build_stats_lines 不再可用")
 
 
 def test_configure_display_font():
     """测试中文显示字体配置能生效。"""
-    font_family = _configure_display_font()
+    font_family = configure_display_font()
     assert font_family is not None
     assert font_family in plt.rcParams['font.sans-serif']
     print('[OK] _configure_display_font 测试通过\n')
 
 
 def test_plot_core_interactive_smoke():
-    """测试交互绘图函数能在无交互输入时构建对象。"""
-    time_sec = np.array([0.0, 1.0, 2.0, 3.0])
-    signals = np.array([[0.0], [1.0], [2.0], [3.0]])
-    labels = ['信号1']
-
-    try:
-        _plot_core_interactive(time_sec, signals, labels)
-    except Exception as exc:
-        raise AssertionError(f'_plot_core_interactive 不应报错: {exc}')
-
-    print('[OK] _plot_core_interactive smoke test 通过\n')
+    """测试交互绘图函数 — CLI plotting 模块已归档，跳过。"""
+    pytest.skip("CLI plotting 模块已归档到 references/cli/，_plot_core_interactive 不再可用")
 
 
 def test_compute_stat():
@@ -115,9 +86,9 @@ def test_compute_stat():
     assert val == 5.0 and desc == '最大值', f'max 失败: {val}, {desc}'
     print(f'[OK] max: {val} ({desc})')
     
-    val, desc = compute_stat(data, 'range')
-    assert val == '1 ~ 5' and desc == '范围', f'range 失败: {val}, {desc}'
-    print(f'[OK] range: {val} ({desc})')
+    result = compute_stat(data, 'range')
+    assert result == (1.0, 5.0, '范围'), f'range 失败: {result}'
+    print(f'[OK] range: {result[0]:.4g} ~ {result[1]:.4g} ({result[2]})')
     
     val, desc = compute_stat(data, 'mean')
     assert val == 3.0 and desc == '平均值', f'mean 失败: {val}, {desc}'
@@ -180,7 +151,7 @@ def test_compute_fitted_circle_radius():
     print('=' * 60)
     
     # 直接测试 _taubin_circle_fit 函数
-    from ftpa.computing import _taubin_circle_fit
+    from ftpa.computing.circle_fit import _taubin_circle_fit
     
     # 生成一个标准圆（单位：米）
     n_points = 100

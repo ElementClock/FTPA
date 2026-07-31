@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 import numpy as np
 from scipy.linalg import eig
-from ..time_utils import select_time_window
+from ..utils.time_utils import select_time_window
 
 logger = logging.getLogger(__name__)
 

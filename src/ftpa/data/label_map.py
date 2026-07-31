@@ -6,7 +6,7 @@
 
 import logging
 import pandas as pd
-from .utils.strings import make_valid_name
+from ..utils.strings import make_valid_name
 
 logger = logging.getLogger(__name__)
 

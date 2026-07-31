@@ -1,0 +1,163 @@
+"""数据加载策略 —— Strategy 模式。
+
+将 DataContext 的 _load_txt / _load_csv 提取为独立的 Loader 类，
+新增数据格式只需实现 DataLoader Protocol 并注册到 LOADERS 即可。
+"""
+
+from __future__ import annotations
+
+import logging
+import os
+from dataclasses import dataclass, field
+from typing import Protocol, runtime_checkable
+
+import numpy as np
+import pandas as pd
+
+from ...data import param_extract
+from ...errors import (
+    FileNotFoundLoadError,
+    FormatLoadError,
+    LabelMapLoadError,
+    ResourceLoadError,
+)
+from ...data.label_map import LabelMap
+from ...utils.time_utils import time_to_seconds_array
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class LoadResult:
+    """数据加载结果。加载成功时由 Loader 返回，失败时抛出自定义异常。"""
+
+    data: dict = field(default_factory=dict)
+    time_vec: np.ndarray | None = None
+    time_sec: np.ndarray | None = None
+    lm: LabelMap | None = None
+    source_type: str = ""
+    data_path: str = ""
+    excel_path: str = ""
+
+
+@runtime_checkable
+class DataLoader(Protocol):
+    """数据加载策略接口。"""
+
+    def load(self, data_path: str, excel_path: str) -> LoadResult:
+        ...
+
+
+class TxtLoader:
+    """TXT 格式数据加载器（从 DataContext._load_txt 迁移，零行为变更）。"""
+
+    def load(self, data_path: str, excel_path: str) -> LoadResult:
+        if not os.path.exists(data_path):
+            raise FileNotFoundLoadError(f"数据文件不存在: {data_path}", path=data_path)
+
+        try:
+            raw = param_extract(data_path)
+            time_vec = raw["TIME"]
+            time_sec = time_to_seconds_array(time_vec)
+
+            # searchsorted 依赖 time_sec 单调递增，一次性验证
+            if len(time_sec) > 1 and not np.all(np.diff(time_sec) >= 0):
+                logger.warning("时间列非单调递增，缩放/统计可能不准确")
+
+            lm: LabelMap | None = None
+            if os.path.exists(excel_path):
+                try:
+                    from ...computing.weight_cg import add_weight_cg_to_data
+                    lm = LabelMap(excel_path)
+                    add_weight_cg_to_data(raw, lm)
+                except LabelMapLoadError:
+                    raise
+                except Exception as e:
+                    logger.warning("映射表加载失败，将使用无标签模式: %s", e)
+                    lm = None
+
+            return LoadResult(
+                data=raw,
+                time_vec=time_vec,
+                time_sec=time_sec,
+                lm=lm,
+                source_type="txt",
+                data_path=data_path,
+                excel_path=excel_path,
+            )
+        except FileNotFoundLoadError:
+            raise
+        except FormatLoadError:
+            raise
+        except ResourceLoadError:
+            raise
+        except LabelMapLoadError:
+            raise
+        except FileNotFoundError as e:
+            raise FileNotFoundLoadError(f"文件不存在: {e}", path=data_path) from e
+        except (pd.errors.ParserError, ValueError) as e:
+            raise FormatLoadError(f"文件格式错误: {e}", path=data_path) from e
+        except MemoryError as e:
+            raise ResourceLoadError(f"内存不足，文件过大: {e}", path=data_path) from e
+        except OSError as e:
+            raise ResourceLoadError(f"文件读取失败: {e}", path=data_path) from e
+        except Exception as e:
+            logger.exception("数据加载未知错误")
+            raise ResourceLoadError(f"加载失败: {e}", path=data_path) from e
+
+
+class CsvLoader:
+    """CSV 格式数据加载器（从 DataContext._load_csv 迁移，零行为变更）。
+
+    CSV 数据自带中文列名，不需要映射表（LabelMap/Excel），
+    列名即为标签，数据保持原始状态。
+    """
+
+    def load(self, data_path: str, excel_path: str) -> LoadResult:
+        from ...data.csv_loader import csv_param_extract
+
+        if not os.path.exists(data_path):
+            raise FileNotFoundLoadError(f"数据文件不存在: {data_path}", path=data_path)
+
+        try:
+            raw = csv_param_extract(data_path)
+            time_vec = raw.get("TIME", np.array([], dtype="timedelta64[ns]"))
+            time_sec = time_to_seconds_array(time_vec)
+
+            # searchsorted 依赖 time_sec 单调递增，一次性验证
+            if len(time_sec) > 1 and not np.all(np.diff(time_sec) >= 0):
+                logger.warning("时间列非单调递增，缩放/统计可能不准确")
+
+            return LoadResult(
+                data=raw,
+                time_vec=time_vec,
+                time_sec=time_sec,
+                lm=None,  # CSV 不使用映射表
+                source_type="csv",
+                data_path=data_path,
+                excel_path="",  # CSV 不使用映射表
+            )
+        except FileNotFoundLoadError:
+            raise
+        except FormatLoadError:
+            raise
+        except ResourceLoadError:
+            raise
+        except FileNotFoundError as e:
+            raise FileNotFoundLoadError(f"文件不存在: {e}", path=data_path) from e
+        except (pd.errors.ParserError, ValueError) as e:
+            raise FormatLoadError(f"文件格式错误: {e}", path=data_path) from e
+        except MemoryError as e:
+            raise ResourceLoadError(f"内存不足，文件过大: {e}", path=data_path) from e
+        except OSError as e:
+            raise ResourceLoadError(f"文件读取失败: {e}", path=data_path) from e
+        except Exception as e:
+            logger.exception("数据加载未知错误")
+            raise ResourceLoadError(f"加载失败: {e}", path=data_path) from e
+
+
+# Strategy 注册表：新增格式只需在此添加映射
+LOADERS: dict[str, type[DataLoader]] = {
+    ".txt": TxtLoader,
+    ".csv": CsvLoader,
+}

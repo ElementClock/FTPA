@@ -25,7 +25,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ..batch_processor import (
+from ..data.batch import (
     batch_analyze_statistics,
     batch_export_summaries,
     batch_process_files,
@@ -120,21 +120,21 @@ class BatchPanel(QWidget):
         pattern = self.pattern_input.text().strip()
         output = self.output_input.text().strip() or "./output"
         fmt = self.format_combo.currentText()
-        excel_path = self.ctx.excel_path if self.ctx else ""
+        excel_path = self.ctx.query.get_excel_path() if self.ctx else ""
         self._run_batch("process", pattern, output, fmt, excel_path)
 
     def _run_batch_analyze(self):
         """启动批量统计分析。"""
         pattern = self.pattern_input.text().strip()
         output = self.output_input.text().strip() or "./output"
-        excel_path = self.ctx.excel_path if self.ctx else ""
+        excel_path = self.ctx.query.get_excel_path() if self.ctx else ""
         self._run_batch("analyze", pattern, output, "csv", excel_path)
 
     def _run_batch_export(self):
         """启动批量导出摘要。"""
         pattern = self.pattern_input.text().strip()
         output = self.output_input.text().strip() or "./output"
-        excel_path = self.ctx.excel_path if self.ctx else ""
+        excel_path = self.ctx.query.get_excel_path() if self.ctx else ""
         self._run_batch("export", pattern, output, "csv", excel_path)
 
     def _run_batch(self, mode: str, pattern: str, output: str, fmt: str, excel_path: str):

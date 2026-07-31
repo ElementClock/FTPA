@@ -7,7 +7,7 @@ import numpy as np
 import tempfile
 import os
 from pathlib import Path
-from ftpa.exporter import (
+from ftpa.data.exporter import (
     export_data,
     export_statistics,
     generate_data_summary,
@@ -151,7 +151,7 @@ class TestBatchProcessor:
     
     def test_batch_process_files_no_files(self, tmp_path):
         """测试批量处理无文件情况"""
-        from ftpa.batch_processor import batch_process_files
+        from ftpa.data.batch import batch_process_files
         
         pattern = str(tmp_path / 'nonexistent_*.txt')
         output_dir = str(tmp_path / 'output')
@@ -164,7 +164,7 @@ class TestBatchProcessor:
     
     def test_batch_analyze_statistics_no_files(self, tmp_path):
         """测试批量统计分析无文件情况"""
-        from ftpa.batch_processor import batch_analyze_statistics
+        from ftpa.data.batch import batch_analyze_statistics
         
         pattern = str(tmp_path / 'nonexistent_*.txt')
         
@@ -174,7 +174,7 @@ class TestBatchProcessor:
     
     def test_batch_export_summaries_no_files(self, tmp_path):
         """测试批量导出摘要无文件情况"""
-        from ftpa.batch_processor import batch_export_summaries
+        from ftpa.data.batch import batch_export_summaries
         
         pattern = str(tmp_path / 'nonexistent_*.txt')
         output_file = str(tmp_path / 'summary.csv')

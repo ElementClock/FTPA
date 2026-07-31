@@ -9,9 +9,9 @@ from __future__ import annotations
 
 import logging
 import numpy as np
-from ..constants import X0, L, BASE_WEIGHT, BASE_REL_CG, BASE_OIL
+from .aircraft import X0, L, BASE_WEIGHT, BASE_REL_CG, BASE_OIL
 from .fuel_data import fuel_rin_oil, fuel_rin_cg_x, fuel_rout_oil, fuel_rout_cg_x
-from ..label_map import LabelMap
+from ..data.label_map import LabelMap
 
 logger = logging.getLogger(__name__)
 

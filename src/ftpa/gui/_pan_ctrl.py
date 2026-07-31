@@ -50,7 +50,7 @@ class PanController:
     DRAG_THRESHOLD: int = 5  # 像素，区分点击与拖拽
 
     def __init__(self, widget: PlotCanvasWidget) -> None:
-        self.w = widget
+        self._widget = widget
 
         # 按下时的 matplotlib 事件对象
         self._press_event = None
@@ -76,7 +76,8 @@ class PanController:
             self._press_event = None
             return
         # 无数据时禁止平移
-        if self.w.ctx is None or self.w.ctx.time_sec is None or len(self.w.ctx.time_sec) == 0:
+        time_sec = self._widget.ctx.query.get_time_sec() if self._widget.ctx else None
+        if time_sec is None or len(time_sec) == 0:
             self._press_event = None
             return
 
@@ -86,7 +87,7 @@ class PanController:
         self._press_event = event
         self._is_panning = False
         self._was_panning = False
-        self._press_xlim = [ax.get_xlim() for ax in self.w.axes]
+        self._press_xlim = [ax.get_xlim() for ax in self._widget.axes]
 
     def on_motion(self, event) -> None:
         """鼠标移动：若超出阈值则开始水平平移。
@@ -113,7 +114,7 @@ class PanController:
             self._is_panning = True
 
             # 拖拽开始：光标变为 ClosedHandCursor（握拳）
-            self.w.canvas.setCursor(Qt.CursorShape.ClosedHandCursor)
+            self._widget.canvas.setCursor(Qt.CursorShape.ClosedHandCursor)
 
         # 计算数据坐标偏移量：纯像素差 × X 轴缩放比（Y 轴无关）
         if event.x is None or self._press_event.x is None:
@@ -130,7 +131,7 @@ class PanController:
         # 仅触发重绘，不修改 Y 轴
         # Y 轴自适应推迟到 on_release → on_canvas_zoom 防抖回调统一处理
         # 避免同一渲染帧内 X 轴平移与 Y 轴自适应的循环冲突导致绘图区域跳动
-        self.w.canvas.draw_idle()
+        self._widget.canvas.draw_idle()
 
     def on_release(self, event) -> None:
         """鼠标释放：若为平移则触发 Y 轴自适应 + 统计更新。
@@ -145,7 +146,7 @@ class PanController:
 
         # 释放后恢复光标为 OpenHandCursor（仍在子图区域内）
         if self._is_panning:
-            self.w.canvas.setCursor(Qt.CursorShape.OpenHandCursor)
+            self._widget.canvas.setCursor(Qt.CursorShape.OpenHandCursor)
 
         # 重置状态
         self._press_event = None
@@ -226,7 +227,7 @@ class PanController:
         if self._press_xlim is None:
             return
 
-        for i, ax in enumerate(self.w.axes):
+        for i, ax in enumerate(self._widget.axes):
             if i >= len(self._press_xlim):
                 continue
             old_start, old_end = self._press_xlim[i]

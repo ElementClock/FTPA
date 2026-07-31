@@ -1,38 +1,30 @@
-"""
-批量处理模块
-支持多文件批量处理和分析
+"""批量处理模块 —— 支持多文件批量处理和分析。
+
+从 batch_processor.py 迁移至 data/ 子包，
+消除 GUI panel_batch.py 对根目录 CLI 模块的依赖。
 """
 
+import glob
 import logging
 import os
-import glob
-from typing import List, Dict, Callable, Optional
 from datetime import datetime
-import pandas as pd
-import numpy as np
+from typing import Callable, List, Optional
 
-from .data import param_extract, extract_time
-from .label_map import LabelMap
-from .computing.weight_cg import add_weight_cg_to_data
+import numpy as np
+import pandas as pd
+
+from . import param_extract
+from ..computing.weight_cg import add_weight_cg_to_data
 from .exporter import export_data, generate_data_summary
-from .time_utils import select_time_window
+from .label_map import LabelMap
+from ..utils.time_utils import select_time_window
 
 logger = logging.getLogger(__name__)
 
 
 def _load_and_prepare(file_path: str, lm: LabelMap) -> dict:
-    """
-    公共：加载数据文件并计算重量重心
-
-    参数:
-        file_path: 文件路径
-        lm: 标签映射对象
-
-    返回:
-        data: 包含 TIME 和总重/重心的数据字典
-    """
+    """公共：加载数据文件并计算重量重心。"""
     data = param_extract(file_path)
-    data['TIME'] = extract_time(file_path)
     add_weight_cg_to_data(data, lm)
     return data
 
@@ -42,25 +34,8 @@ def batch_process_files(file_pattern: str,
                        excel_file: str,
                        process_func: Optional[Callable] = None,
                        export_format: str = 'csv',
-                       verbose: bool = True) -> Dict:
-    """
-    批量处理多个数据文件
-
-    参数:
-        file_pattern: 文件匹配模式，如 'data/*.txt' 或 'data/file_*.txt'
-        output_dir: 输出目录
-        excel_file: 标签映射 Excel 文件路径
-        process_func: 自定义处理函数，签名为 func(data, lm, file_info) -> Dict
-        export_format: 导出格式，'csv', 'parquet', 'hdf5'
-        verbose: 是否打印详细信息
-
-    返回:
-        处理结果字典，包含成功/失败文件列表和统计信息
-
-    示例:
-        >>> results = batch_process_files('data/*.txt', 'output/', '参数名.xlsx')
-        >>> print(f"成功处理 {results['success_count']} 个文件")
-    """
+                       verbose: bool = True) -> dict:
+    """批量处理多个数据文件。"""
     files = glob.glob(file_pattern)
 
     if not files:
@@ -154,25 +129,8 @@ def batch_analyze_statistics(file_pattern: str,
                             excel_file: str,
                             time_window: Optional[tuple] = None,
                             signals: Optional[List[str]] = None) -> pd.DataFrame:
-    """
-    批量分析多个文件的统计信息
-
-    参数:
-        file_pattern: 文件匹配模式
-        excel_file: 标签映射 Excel 文件路径
-        time_window: 时间窗口 (start_time, end_time)，None 表示全时段
-        signals: 要分析的信号列表（中文标签），None 表示所有信号
-
-    返回:
-        统计结果 DataFrame，每行一个文件，列包含各信号的统计值
-
-    示例:
-        >>> df = batch_analyze_statistics('data/*.txt', '参数名.xlsx',
-        ...                               time_window=('00:00:00', '00:10:00'),
-        ...                               signals=['指示空速表决值', '俯仰角表决值'])
-        >>> df.to_csv('batch_stats.csv')
-    """
-    from .statistics.basic import compute_stat
+    """批量分析多个文件的统计信息。"""
+    from ..statistics.basic import compute_stat
 
     files = glob.glob(file_pattern)
 
@@ -233,17 +191,7 @@ def batch_analyze_statistics(file_pattern: str,
 def batch_export_summaries(file_pattern: str,
                           excel_file: str,
                           output_file: str = 'batch_summary.csv'):
-    """
-    批量导出多个文件的数据摘要
-
-    参数:
-        file_pattern: 文件匹配模式
-        excel_file: 标签映射 Excel 文件路径
-        output_file: 输出文件路径
-
-    示例:
-        >>> batch_export_summaries('data/*.txt', '参数名.xlsx', 'summary.csv')
-    """
+    """批量导出多个文件的数据摘要。"""
     files = glob.glob(file_pattern)
 
     if not files:

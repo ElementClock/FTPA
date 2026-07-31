@@ -116,7 +116,7 @@ class CanvasDropFilter(QObject):
 
     def __init__(self, widget: PlotCanvasWidget) -> None:
         super().__init__(widget.canvas)
-        self.w = widget
+        self._widget = widget
         self._hovered_subplot: int | None = None
 
     def eventFilter(self, obj: QObject, event: QEvent) -> bool:
@@ -156,7 +156,7 @@ class CanvasDropFilter(QObject):
 
         if hit_idx != self._hovered_subplot:
             self._hovered_subplot = hit_idx
-            self.w._layout.apply_drag_highlight(hit_idx)
+            self._widget._layout.apply_drag_highlight(hit_idx)
 
         if hit_idx is not None:
             event.acceptProposedAction()
@@ -166,7 +166,7 @@ class CanvasDropFilter(QObject):
     def _drag_leave(self, event: QEvent) -> None:
         """拖拽离开 canvas — 清除高亮。"""
         self._hovered_subplot = None
-        self.w._layout.clear_drag_highlight()
+        self._widget._layout.clear_drag_highlight()
 
     def _drop(self, event: QEvent) -> None:
         """释放拖拽 — 添加参数到目标子图。"""
@@ -181,7 +181,7 @@ class CanvasDropFilter(QObject):
         if hit_idx is None:
             event.ignore()
             self._hovered_subplot = None
-            self.w._layout.clear_drag_highlight()
+            self._widget._layout.clear_drag_highlight()
             return
 
         # 提取 field_name
@@ -189,13 +189,13 @@ class CanvasDropFilter(QObject):
 
         # 清除拖拽高亮
         self._hovered_subplot = None
-        self.w._layout.clear_drag_highlight()
+        self._widget._layout.clear_drag_highlight()
 
         # 添加信号到目标子图
-        self.w.add_signal_to_subplot(hit_idx, field_name)
+        self._widget.add_signal_to_subplot(hit_idx, field_name)
 
         # 通知外部更新参数树指示器
-        self.w.param_dropped.emit(field_name)
+        self._widget.param_dropped.emit(field_name)
 
         event.acceptProposedAction()
 
@@ -210,7 +210,7 @@ class CanvasDropFilter(QObject):
           → figure 归一化坐标 (0-1)
           → Axes Bbox contains() 命中测试
         """
-        w = self.w
+        w = self._widget
         if not w.axes:
             return None
 

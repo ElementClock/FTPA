@@ -1,12 +1,8 @@
 """FTPA 自定义异常层次。
 
 提供结构化的错误类型，使调用方能够区分不同类型的加载失败。
-
-注意：当前 services.py/worker.py 中的异常捕获使用内置类型分层
-(FileNotFoundError → ValueError → MemoryError → OSError → Exception)，
-而非此模块的自定义类型。本模块为未来统一异常处理预留，
-当需要让调用方按异常类型执行不同恢复策略时，可将内置异常
-转换为此层次中的对应类型（raise X from e）。
+loading.py 中的 Loader 将内置异常转换为此层次中的对应类型
+（raise X from e），worker.py 按 FtpaError 子类映射为用户友好消息。
 """
 from __future__ import annotations
 

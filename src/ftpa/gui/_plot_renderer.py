@@ -25,7 +25,7 @@ from matplotlib.ticker import FuncFormatter
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import QMenu, QMessageBox
 
-from ..time_utils import format_time_seconds
+from ..utils.time_utils import format_time_seconds
 from ._layout_ctrl import LayoutController
 from ._downsampler import min_max_downsample
 from ..config import CONFIG
@@ -40,7 +40,7 @@ class PlotRenderer:
     """数据绘制 + 信号管理。"""
 
     def __init__(self, widget: PlotCanvasWidget) -> None:
-        self.w = widget
+        self._widget = widget
         # Line2D 缓存: (subplot_idx, field_name) -> Line2D
         self._line_cache: dict[tuple[int, str], Any] = {}
         # 空子图文本标注缓存: subplot_idx -> Text
@@ -72,9 +72,11 @@ class PlotRenderer:
         Returns:
             (time, data) 渲染用的时间/数据数组，或 None（数据不可用）。
         """
-        w = self.w
-        data_arr = w.ctx.data.get(f)
-        if data_arr is None or w.ctx.time_sec is None:
+        w = self._widget
+        query = w.ctx.query
+        data_arr = query.get_signal_data(f)
+        time_sec = query.get_time_sec()
+        if data_arr is None or time_sec is None:
             return None
 
         # 检测是否需要降采样：根据当前视图范围
@@ -86,19 +88,19 @@ class PlotRenderer:
 
         if xlim is not None:
             t_start, t_end = float(xlim[0]), float(xlim[1])
-            n_total = len(w.ctx.time_sec)
+            n_total = len(time_sec)
             # 粗略估计可见点数
-            i_start = np.searchsorted(w.ctx.time_sec, t_start, side="left")
-            i_end = np.searchsorted(w.ctx.time_sec, t_end, side="right")
+            i_start = np.searchsorted(time_sec, t_start, side="left")
+            i_end = np.searchsorted(time_sec, t_end, side="right")
             n_visible = i_end - i_start
 
             if n_visible > CONFIG.plot.downsample_threshold:
                 ds_time, ds_data = min_max_downsample(
-                    w.ctx.time_sec, data_arr, t_start, t_end
+                    time_sec, data_arr, t_start, t_end
                 )
                 return ds_time, ds_data
 
-        return w.ctx.time_sec, data_arr
+        return time_sec, data_arr
 
     def refresh_viewport_data(self) -> None:
         """根据当前视图范围重新评估降采样，刷新所有 Line2D 数据。
@@ -138,7 +140,7 @@ class PlotRenderer:
           - 新建新增信号的 Line2D
           - 避免不必要的 ax.clear() + 对象重建
         """
-        w = self.w
+        w = self._widget
         if w.ctx is None:
             return
 
@@ -218,7 +220,7 @@ class PlotRenderer:
 
         仅在布局变更（switch_layout）时调用，确保 axes 完全干净。
         """
-        w = self.w
+        w = self._widget
         self.invalidate_cache()
 
         crossing_fields: set[str] = set()
@@ -253,7 +255,7 @@ class PlotRenderer:
             idx: 子图索引（0-based）
             crossing_fields: 穿越字段收集集合（就地修改）
         """
-        w = self.w
+        w = self._widget
         fields = w.subplot_fields.get(idx, [])
         if fields:
             for f in fields:
@@ -302,7 +304,7 @@ class PlotRenderer:
         if render_data is None:
             return None
         t, d = render_data
-        w = self.w
+        w = self._widget
         line = ax.plot(
             t, d, linewidth=CONFIG.plot.line_width, label=w.ctx.get_label(field),
         )[0]
@@ -333,12 +335,12 @@ class PlotRenderer:
         if not fields:
             return ""
         if len(fields) == 1:
-            return self.w.ctx.get_label(fields[0])
+            return self._widget.ctx.get_label(fields[0])
         return f"子图{idx + 1}"
 
     def _apply_axis_decorations(self) -> None:
         """应用 X 轴标签和时间格式化器（不触发重绘）。"""
-        w = self.w
+        w = self._widget
         mode = w._layout_mode
 
         # 确定底部子图索引（仅底部显示 X 轴标签）
@@ -363,7 +365,7 @@ class PlotRenderer:
 
     def add_to_subplot(self, field_name: str) -> None:
         """添加信号到当前选中的子图。"""
-        w = self.w
+        w = self._widget
         idx = w._selected_subplot_idx
         if idx is None:
             w.log_message.emit("请先点击选中一个子图")
@@ -391,7 +393,7 @@ class PlotRenderer:
 
     def remove_from_subplot(self, field_name: str) -> None:
         """从当前选中的子图移除信号。"""
-        w = self.w
+        w = self._widget
         idx = w._selected_subplot_idx
         if idx is None:
             w.log_message.emit("请先点击选中一个子图")
@@ -417,7 +419,7 @@ class PlotRenderer:
         - "删除信号"：仅子图有信号时显示
         - "清空该子图"：始终显示，无信号时灰显
         """
-        w = self.w
+        w = self._widget
         ctx = w.ctx
         menu = QMenu(w)
 
@@ -475,11 +477,11 @@ class PlotRenderer:
 
     def _switch_layout_from_menu(self, mode: str) -> None:
         """右键菜单：切换布局模式。"""
-        self.w.set_layout_mode(mode)
+        self._widget.set_layout_mode(mode)
 
     def _add_to_subplot(self, idx: int, field: str) -> None:
         """向指定子图 idx 添加信号 field（供拖放和内部调用）。"""
-        w = self.w
+        w = self._widget
         max_per_plot = LayoutController.LAYOUT_CONFIG.get(w._layout_mode, (0, 5))[1]
         if max_per_plot > 0 and len(w.subplot_fields.get(idx, [])) >= max_per_plot:
             QMessageBox.information(w, "提示", f"子图 {idx + 1} 已达到最大信号数 ({max_per_plot})。")
@@ -495,7 +497,7 @@ class PlotRenderer:
 
     def _remove_from_subplot(self, idx: int, field: str) -> None:
         """右键菜单：从指定子图 idx 移除信号 field。"""
-        w = self.w
+        w = self._widget
         if idx in w.subplot_fields and field in w.subplot_fields[idx]:
             w.subplot_fields[idx].remove(field)
             label = w.ctx.get_label(field) if w.ctx else field
@@ -505,7 +507,7 @@ class PlotRenderer:
 
     def _clear_subplot(self, idx: int) -> None:
         """清空指定子图 idx 的所有信号。"""
-        w = self.w
+        w = self._widget
         if idx in w.subplot_fields and w.subplot_fields[idx]:
             w.subplot_fields[idx] = []
             w.log_message.emit(f"已清空子图 {idx + 1}")
@@ -514,7 +516,7 @@ class PlotRenderer:
 
     def clear_selected_subplot(self) -> None:
         """清空当前选中子图的所有信号（供外部按钮调用）。"""
-        w = self.w
+        w = self._widget
         idx = w._selected_subplot_idx
         if idx is None:
             w.log_message.emit("请先点击选中一个子图")
@@ -525,7 +527,7 @@ class PlotRenderer:
 
     def set_data_context(self, ctx) -> None:
         """设置数据上下文并重绘。"""
-        w = self.w
+        w = self._widget
         w.ctx = ctx
         self.rebuild_plot()
         # 记录初始时间范围（供 reset_zoom 恢复）

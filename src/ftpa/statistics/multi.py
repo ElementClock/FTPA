@@ -5,23 +5,80 @@
 from __future__ import annotations
 
 import numpy as np
+from dataclasses import dataclass
 from typing import Optional, Dict, List, Union
-from ..time_utils import select_time_window, format_time_seconds, format_duration_chinese
+from ..utils.time_utils import select_time_window, format_time_seconds, format_duration_chinese
 from .basic import compute_stat, find_crossing_points
-from ..label_map import LabelMap
+from ..data.label_map import LabelMap
 
 
-def _format_stat_value(val: Union[int, float, np.number, str]) -> str:
-    """格式化统计值，数值用 g 格式，其他转为字符串"""
+@dataclass
+class VarSpec:
+    """变量统计规格。"""
+    data: np.ndarray
+    name: str
+    stat_type: str
+
+
+def _format_stat_value(val: Union[int, float, np.number, str, tuple]) -> str:
+    """格式化统计值，数值用 g 格式，其他转为字符串
+
+    对于 range 类型的 (min_val, max_val) 元组，格式化为 'min ~ max'。
+    """
+    if isinstance(val, tuple):
+        # range 类型: (min_val, max_val)
+        return f'{val[0]:.4g} ~ {val[1]:.4g}'
     if isinstance(val, (int, float, np.number)):
         return f'{val:.6g}'
     return str(val)
+
+
+def compute_var_stats_typed(time_vec: np.ndarray, start_t: Union[float, str],
+                            end_t: Union[float, str], specs: list[VarSpec]) -> tuple:
+    """
+    对多个变量在指定时间区间内计算统计值，返回结构化数据（不打印）
+
+    参数:
+        time_vec: 时间向量
+        start_t: 起始时间
+        end_t: 结束时间
+        specs: VarSpec 列表，每个元素包含 data, name, stat_type
+
+    返回:
+        (var_names, descs, vals, actual_start, actual_end)
+    """
+    i_start, i_end, actual_start, actual_end = select_time_window(time_vec, start_t, end_t)
+
+    var_names = []
+    descs = []
+    vals = []
+
+    for spec in specs:
+        if len(time_vec) != len(spec.data):
+            raise ValueError(f'TIME 与变量 "{spec.name}" 的长度必须相同。')
+
+        segment = spec.data[i_start:i_end + 1]
+        result = compute_stat(segment, spec.stat_type)
+        if len(result) == 3:
+            min_v, max_v, desc = result
+            val = (min_v, max_v)
+        else:
+            val, desc = result
+
+        var_names.append(spec.name)
+        descs.append(desc)
+        vals.append(val)
+
+    return var_names, descs, vals, actual_start, actual_end
 
 
 def _compute_var_stats_data(time_vec: np.ndarray, start_t: Union[float, str],
                             end_t: Union[float, str], *var_args) -> tuple:
     """
     对多个变量在指定时间区间内计算统计值，返回结构化数据（不打印）
+
+    .. deprecated::
+        请使用 compute_var_stats_typed，传入 list[VarSpec] 替代 *var_args。
 
     参数:
         time_vec: 时间向量
@@ -36,29 +93,11 @@ def _compute_var_stats_data(time_vec: np.ndarray, start_t: Union[float, str],
     if n_var_args % 3 != 0:
         raise ValueError(f'变量参数必须为 (data, name, stat_type) 三元组，当前额外参数个数为 {n_var_args}。')
 
-    num_vars = n_var_args // 3
-    i_start, i_end, actual_start, actual_end = select_time_window(time_vec, start_t, end_t)
-
-    var_names = []
-    descs = []
-    vals = []
-
-    for i in range(num_vars):
-        data = var_args[3 * i]
-        name = var_args[3 * i + 1]
-        stat_type = var_args[3 * i + 2]
-
-        if len(time_vec) != len(data):
-            raise ValueError(f'TIME 与变量 "{name}" 的长度必须相同。')
-
-        segment = data[i_start:i_end + 1]
-        val, desc = compute_stat(segment, stat_type)
-
-        var_names.append(name)
-        descs.append(desc)
-        vals.append(val)
-
-    return var_names, descs, vals, actual_start, actual_end
+    specs = [
+        VarSpec(data=var_args[3 * i], name=var_args[3 * i + 1], stat_type=var_args[3 * i + 2])
+        for i in range(n_var_args // 3)
+    ]
+    return compute_var_stats_typed(time_vec, start_t, end_t, specs)
 
 
 def compute_var_stats(time_vec: np.ndarray, start_t: Union[float, str],
@@ -89,33 +128,46 @@ def compute_var_stats(time_vec: np.ndarray, start_t: Union[float, str],
         print(f'{var_names[i]}\t{descs[i]}\t{_format_stat_value(vals[i])}')
 
 
-def _show_group_stats_data(time_vec: np.ndarray, start_t: Union[float, str],
-                           end_t: Union[float, str], *group_args) -> list:
+@dataclass
+class GroupSpec:
+    """分组统计规格。"""
+    stat_type: str
+    data_list: list
+    name_list: list
+
+
+def show_group_stats_typed(time_vec: np.ndarray, start_t: Union[float, str],
+                           end_t: Union[float, str], specs: list[GroupSpec]) -> None:
     """
-    对多组同类变量计算统计量，返回结构化数据（不打印）
+    对多组同类变量计算统计量，并以紧凑的"名/值"格式输出
 
     参数:
         time_vec: 时间向量
         start_t: 起始时间
         end_t: 结束时间
-        *group_args: (stat_type, data_list, name_list) 三元组的重复
+        specs: GroupSpec 列表，每个元素包含 stat_type, data_list, name_list
 
-    返回:
-        results: 列表，每项为 (name_str, desc, val_str) 元组
+    示例:
+        show_group_stats_typed(TIME, 0, 100, [
+            GroupSpec('max', [data1, data2], ['变量1', '变量2']),
+            GroupSpec('min', [data3, data4], ['变量3', '变量4']),
+        ])
     """
+    results = _compute_group_stats_typed_data(time_vec, start_t, end_t, specs)
+    for name_str, desc, val_str in results:
+        print(f'{name_str}\t{desc}\t{val_str}')
+
+
+def _compute_group_stats_typed_data(time_vec: np.ndarray, start_t: Union[float, str],
+                                    end_t: Union[float, str], specs: list[GroupSpec]) -> list:
+    """对多组同类变量计算统计量，返回结构化数据（不打印）— typed 版本。"""
     i_start, i_end, actual_start, actual_end = select_time_window(time_vec, start_t, end_t)
-
-    n_args = len(group_args)
-    if n_args % 3 != 0:
-        raise ValueError('输入必须为三元组：(stat_type, data_list, name_list) 的重复。')
-
-    n_groups = n_args // 3
     results = []
 
-    for g in range(n_groups):
-        stat_type = group_args[3 * g]
-        data_list = group_args[3 * g + 1]
-        name_list = group_args[3 * g + 2]
+    for g, spec in enumerate(specs):
+        stat_type = spec.stat_type
+        data_list = spec.data_list
+        name_list = spec.name_list
 
         if not isinstance(data_list, list) or not isinstance(name_list, list):
             raise ValueError(f'第 {g + 1} 组的 data_list 和 name_list 必须是列表。')
@@ -131,14 +183,47 @@ def _show_group_stats_data(time_vec: np.ndarray, start_t: Union[float, str],
         vals = []
         for k in range(n_vars):
             segment = data_list[k][i_start:i_end + 1]
-            val, desc = compute_stat(segment, stat_type)
-            vals.append(val)
+            result = compute_stat(segment, stat_type)
+            if len(result) == 3:
+                min_v, max_v, desc = result
+                vals.append((min_v, max_v))
+            else:
+                val, desc = result
+                vals.append(val)
 
         name_str = '/'.join(name_list)
         val_str = '/'.join(_format_stat_value(v) for v in vals)
         results.append((name_str, desc, val_str))
 
     return results
+
+
+def _show_group_stats_data(time_vec: np.ndarray, start_t: Union[float, str],
+                           end_t: Union[float, str], *group_args) -> list:
+    """
+    对多组同类变量计算统计量，返回结构化数据（不打印）
+
+    .. deprecated::
+        请使用 show_group_stats_typed，传入 list[GroupSpec] 替代 *group_args。
+
+    参数:
+        time_vec: 时间向量
+        start_t: 起始时间
+        end_t: 结束时间
+        *group_args: (stat_type, data_list, name_list) 三元组的重复
+
+    返回:
+        results: 列表，每项为 (name_str, desc, val_str) 元组
+    """
+    n_args = len(group_args)
+    if n_args % 3 != 0:
+        raise ValueError('输入必须为三元组：(stat_type, data_list, name_list) 的重复。')
+
+    specs = [
+        GroupSpec(stat_type=group_args[3 * g], data_list=group_args[3 * g + 1], name_list=group_args[3 * g + 2])
+        for g in range(n_args // 3)
+    ]
+    return _compute_group_stats_typed_data(time_vec, start_t, end_t, specs)
 
 
 def show_group_stats(time_vec: np.ndarray, start_t: Union[float, str],
@@ -247,6 +332,145 @@ def statistics_params(t_start: Union[float, str], t_end: Union[float, str],
     return lines
 
 
+def statistics_params_without_labelmap(
+    data: Dict[str, np.ndarray],
+    t_start: Union[float, str],
+    t_end: Union[float, str],
+    signal_ids: Optional[List[str]] = None,
+    field_resolver=None,
+) -> List[str]:
+    """CSV 模式参数统计：列名即为标签，无需 LabelMap。
+
+    参数:
+        data: 数据字典，必须包含 'TIME' 键
+        t_start: 起始时间
+        t_end: 结束时间
+        signal_ids: 可选，指定要统计的信号字段名列表
+        field_resolver: 可选，提供 get_field_names() 方法的对象，
+                        当 signal_ids 为空时用于枚举字段
+
+    返回:
+        lines: 统计结果字符串列表
+    """
+    if 'TIME' not in data:
+        return ['数据中无 TIME 字段']
+
+    TIME = data['TIME']
+    i_start, i_end, t_start_actual, t_end_actual = select_time_window(TIME, t_start, t_end)
+    lines = []
+
+    # 确定要处理的字段
+    if not signal_ids:
+        fields_to_process = field_resolver.get_field_names() if field_resolver else []
+    else:
+        fields_to_process = [s for s in signal_ids if s in data]
+
+    if not fields_to_process:
+        return ['未找到可统计的变量。']
+
+    for field_name in fields_to_process:
+        signal = data[field_name]
+        if not isinstance(signal, np.ndarray) or len(signal) != len(TIME):
+            continue
+        if not np.issubdtype(signal.dtype, np.number) and signal.dtype != bool:
+            continue
+
+        segment = signal[i_start:i_end + 1]
+        label = field_name  # CSV 列名即为标签
+
+        if len(segment) == 0:
+            lines.append(f'{label}: 窗口内无数据')
+            continue
+
+        stat_types = ['start', 'end', 'min', 'max', 'mean', 'std', 'points']
+        values = []
+        for st in stat_types:
+            val, _ = compute_stat(segment, st)
+            values.append(_format_stat_value(val))
+
+        line = (f'{label}  起始={values[0]}, 结束={values[1]}, 最小={values[2]}, '
+                f'最大={values[3]}, 平均={values[4]}, 标准差={values[5]}, 点数={values[6]}')
+        lines.append(line)
+
+    if not lines:
+        lines.append('未找到可统计的变量。')
+    return lines
+
+
+def crossing_analysis_without_labelmap(
+    data: Dict[str, np.ndarray],
+    signal_ids: List[str],
+    mode: str,
+    threshold: float,
+    t_start: Union[float, str],
+    t_end: Union[float, str],
+) -> List[str]:
+    """CSV 模式穿越分析：列名即为标签，无需 LabelMap。
+
+    参数:
+        data: 数据字典，必须包含 'TIME' 键
+        signal_ids: 信号标识符列表，第一项为主信号，其余为关联信号
+        mode: 穿越模式
+        threshold: 阈值（数值）
+        t_start: 起始时间
+        t_end: 结束时间
+
+    返回:
+        lines: 分析结果字符串列表
+    """
+    if not signal_ids:
+        return ['signal_ids 不能为空']
+
+    TIME = data.get('TIME')
+    if TIME is None:
+        return ['数据中无 TIME 字段']
+
+    i_start, i_end, _, _ = select_time_window(TIME, t_start, t_end)
+
+    fields = [s if s in data else '' for s in signal_ids]
+    labels = signal_ids  # CSV 列名即为标签
+
+    main_field = fields[0]
+    main_label = labels[0]
+
+    if not main_field:
+        return [f'主信号 "{signal_ids[0]}" 未找到']
+
+    main_sig = data[main_field]
+    if len(main_sig) != len(TIME):
+        return [f'主信号 "{main_label}" 与时间向量长度不一致']
+
+    main_sig = main_sig[i_start:i_end + 1]
+    cross_idx_local = find_crossing_points(main_sig, threshold, mode)
+
+    if cross_idx_local is None:
+        return [f'在窗口内未检测到 {main_label} 的 {mode} 穿越（阈值 {threshold:.2f}）']
+
+    mode_text = mode.replace('First', '首次').replace('Last', '末次')
+    mode_text = mode_text.replace('Down', '下降').replace('Up', '上升')
+
+    lines = [f'{main_label} {mode_text}穿越阈值 {threshold:.2f} 时：']
+
+    for i in range(1, len(signal_ids)):
+        other_field = fields[i]
+        display_name = labels[i]
+
+        if not other_field or other_field not in data:
+            lines.append(f'    {signal_ids[i]} = (无数据)')
+            continue
+
+        other_sig = data[other_field]
+        if len(other_sig) != len(TIME):
+            lines.append(f'    {display_name} = (长度不一致)')
+            continue
+
+        val = other_sig[i_start:i_end + 1]
+        cross_idx = cross_idx_local
+        lines.append(f'    {display_name} = {val[cross_idx]:.2f}')
+
+    return lines
+
+
 def crossing_analysis(data: Dict[str, np.ndarray], lm: LabelMap,
                       signal_ids: List[str], mode: str,
                       threshold: float, t_start: Union[float, str],
@@ -330,7 +554,7 @@ def crossing_analysis(data: Dict[str, np.ndarray], lm: LabelMap,
             continue
 
         val = other_sig[i_start:i_end + 1]
-        cross_idx = cross_idx_local - 1
+        cross_idx = cross_idx_local
         lines.append(f'    {display_name} = {val[cross_idx]:.2f}')
 
     return lines

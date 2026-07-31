@@ -23,7 +23,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ..exporter import export_data, export_statistics
+from ..data.exporter import export_data, export_statistics
 from .services import DataContext
 
 

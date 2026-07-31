@@ -8,8 +8,14 @@ from __future__ import annotations
 
 import logging
 
-import pandas as pd
 from PySide6.QtCore import QThread, Signal
+
+from ...errors import (
+    FtpaError,
+    FileNotFoundLoadError,
+    FormatLoadError,
+    ResourceLoadError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -32,21 +38,22 @@ class DataLoaderWorker(QThread):
 
             ctx = DataContext()
             self.progress.emit(30, "正在加载数据...")
-            ok, msg = ctx.load(self.data_path, self.excel_path)
-            self._ctx = ctx if ok else None
-            if ok:
-                self.progress.emit(100, "加载完成")
-                self.load_finished.emit(ctx, "")
-            else:
-                self.load_finished.emit(None, msg or f"加载失败: {self.data_path}")
-        except FileNotFoundError as e:
+            ctx.load(self.data_path, self.excel_path)
+            self._ctx = ctx
+            self.progress.emit(100, "加载完成")
+            self.load_finished.emit(ctx, "")
+        except FileNotFoundLoadError as e:
             self.load_finished.emit(None, f"文件不存在: {e}")
-        except (pd.errors.ParserError, ValueError) as e:
+        except FormatLoadError as e:
             self.load_finished.emit(None, f"文件格式错误，请检查文件内容: {e}")
-        except MemoryError:
-            self.load_finished.emit(None, "内存不足，文件过大，请关闭其他程序后重试")
-        except OSError as e:
-            self.load_finished.emit(None, f"文件读取失败: {e}")
+        except ResourceLoadError as e:
+            msg = str(e)
+            if "内存不足" in msg:
+                self.load_finished.emit(None, "内存不足，文件过大，请关闭其他程序后重试")
+            else:
+                self.load_finished.emit(None, f"文件读取失败: {e}")
+        except FtpaError as e:
+            self.load_finished.emit(None, f"加载失败: {e}")
         except Exception as e:
             logger.exception("数据加载未知错误")
             self.load_finished.emit(None, f"加载失败: {e}")

@@ -73,11 +73,12 @@ class TestDataContext:
         assert ctx.get_field_names() == []
 
     def test_data_context_load_missing_file(self):
-        """加载不存在的文件应返回失败。"""
+        """加载不存在的文件应抛出 FileNotFoundLoadError。"""
+        from ftpa.errors import FileNotFoundLoadError
+
         ctx = DataContext()
-        ok, msg = ctx.load("/nonexistent/path.txt", "/nonexistent/labels.xlsx")
-        assert not ok
-        assert "不存在" in msg
+        with pytest.raises(FileNotFoundLoadError, match="不存在"):
+            ctx.load("/nonexistent/path.txt", "/nonexistent/labels.xlsx")
 
     def test_get_field_labels_without_labelmap(self):
         """无 LabelMap 时字段标签应等于字段名本身。"""
@@ -160,8 +161,8 @@ class TestDataContext:
         ctx.unload()
         assert not ctx.is_loaded
         # 尝试加载不存在的文件（验证状态可正常切换）
-        ok, msg = ctx.load("/nonexistent/path.txt", "")
-        assert not ok
+        with pytest.raises(Exception):
+            ctx.load("/nonexistent/path.txt", "")
 
 
 class TestDataContextWithFile:
@@ -180,8 +181,7 @@ class TestDataContextWithFile:
     def test_load_valid_file(self, sample_data_file):
         """加载有效文件应成功。"""
         ctx = DataContext()
-        ok, msg = ctx.load(sample_data_file, "/nonexistent/labels.xlsx")
-        assert ok, f"加载失败: {msg}"
+        ctx.load(sample_data_file, "/nonexistent/labels.xlsx")
         assert ctx.is_loaded
         assert ctx.get_row_count() > 0
         assert ctx.get_column_count() > 1
@@ -207,12 +207,14 @@ class TestDataContextWithFile:
 # PanController 单元测试
 # ============================================================================
 
-def _make_widget_mock(n_axes=2, time_sec=None, xlim_list=None):
+def _make_widget_mock(n_axes=2, time_sec=..., xlim_list=None):
     """创建模拟 PlotCanvasWidget 的 mock 对象。
 
     Args:
         n_axes: 子图数量
-        time_sec: DataContext 中的 time_sec 数组（None 表示无数据）
+        time_sec: DataContext 中的 time_sec 数组。
+                  默认值 ... 表示使用默认有数据状态 [0.0, 100.0]。
+                  显式传 None 表示无数据。
         xlim_list: 每个子图的初始 xlim，默认 (0, 100)
     """
     widget = MagicMock()
@@ -244,13 +246,34 @@ def _make_widget_mock(n_axes=2, time_sec=None, xlim_list=None):
         axes.append(ax)
     widget.axes = axes
 
-    # DataContext mock（默认提供 time_sec，除非显式传 None）
-    if time_sec is not None:
+    # DataContext mock
+    if time_sec is None:
+        # 无数据状态：time_sec 为空数组
         ctx = MagicMock()
-        ctx.time_sec = time_sec
+        ctx.time_sec = np.array([])
+        ctx.query.get_time_sec.return_value = np.array([])
+        ctx.query.has_data.return_value = False
+        ctx.query.get_data_path.return_value = ""
+        ctx.query.get_excel_path.return_value = ""
+        ctx.query.get_source_type.return_value = ""
+    elif time_sec is ...:
+        # 默认有数据状态
+        default_ts = np.array([0.0, 100.0])
+        ctx = MagicMock()
+        ctx.time_sec = default_ts
+        ctx.query.get_time_sec.return_value = default_ts
+        ctx.query.has_data.return_value = True
+        ctx.query.get_data_path.return_value = "test.txt"
+        ctx.query.get_excel_path.return_value = ""
+        ctx.query.get_source_type.return_value = "txt"
     else:
         ctx = MagicMock()
-        ctx.time_sec = np.array([0.0, 100.0])
+        ctx.time_sec = time_sec
+        ctx.query.get_time_sec.return_value = time_sec
+        ctx.query.has_data.return_value = len(time_sec) > 0
+        ctx.query.get_data_path.return_value = "test.txt"
+        ctx.query.get_excel_path.return_value = ""
+        ctx.query.get_source_type.return_value = "txt"
     widget.ctx = ctx
 
     # canvas mock
@@ -918,11 +941,6 @@ class TestCrossingAnalyzerAdjustYLimits:
         widget.axes = axes
         widget.subplot_fields = fields
 
-        # 创建 DataContext
-        ctx = MagicMock()
-        ctx.time_sec = np.linspace(0, 100, 101)
-        widget.ctx = ctx
-
         # 为每个字段的 data 创建模拟数据
         all_fields = []
         for flist in fields.values():
@@ -930,7 +948,15 @@ class TestCrossingAnalyzerAdjustYLimits:
         data_map = {}
         for f in all_fields:
             data_map[f] = np.sin(np.linspace(0, 2 * np.pi, 101)) * 10 + 50
+
+        # 创建 DataContext
+        ctx = MagicMock()
+        ctx.time_sec = np.linspace(0, 100, 101)
         ctx.data = data_map
+        # DataQueryService mock
+        ctx.query.get_time_sec.return_value = ctx.time_sec
+        ctx.query.get_signal_data.side_effect = lambda f: data_map.get(f)
+        widget.ctx = ctx
 
         canvas = MagicMock()
         widget.canvas = canvas
@@ -960,6 +986,9 @@ class TestCrossingAnalyzerAdjustYLimits:
         widget.ctx.data = {"sig1": sig_data}
         # time_sec: [0, 50, 100]，xlim=(0, 100) 涵盖全部
         widget.ctx.time_sec = np.array([0.0, 50.0, 100.0])
+        # 同步更新 query mock
+        widget.ctx.query.get_time_sec.return_value = widget.ctx.time_sec
+        widget.ctx.query.get_signal_data.side_effect = lambda f: {"sig1": sig_data}.get(f)
         widget.axes[0].get_xlim.return_value = (0.0, 100.0)
 
         analyzer._adjust_y_limits()
@@ -976,6 +1005,8 @@ class TestCrossingAnalyzerAdjustYLimits:
         sig_data = np.array([5.0, 5.0, 5.0])  # min=max=5
         widget.ctx.data = {"sig1": sig_data}
         widget.ctx.time_sec = np.array([0.0, 50.0, 100.0])
+        widget.ctx.query.get_time_sec.return_value = widget.ctx.time_sec
+        widget.ctx.query.get_signal_data.side_effect = lambda f: {"sig1": sig_data}.get(f)
         widget.axes[0].get_xlim.return_value = (0.0, 100.0)
 
         analyzer._adjust_y_limits()
@@ -1002,6 +1033,8 @@ class TestCrossingAnalyzerAdjustYLimits:
         sig_data = np.array([np.nan, 10.0, 20.0, np.nan])
         widget.ctx.data = {"sig1": sig_data}
         widget.ctx.time_sec = np.array([0.0, 33.0, 66.0, 100.0])
+        widget.ctx.query.get_time_sec.return_value = widget.ctx.time_sec
+        widget.ctx.query.get_signal_data.side_effect = lambda f: {"sig1": sig_data}.get(f)
         widget.axes[0].get_xlim.return_value = (0.0, 100.0)
 
         analyzer._adjust_y_limits()
@@ -1030,6 +1063,7 @@ class TestCrossingAnalyzerAdjustYLimits:
         widget.axes = []
         ctx = MagicMock()
         ctx.time_sec = np.array([0.0, 100.0])
+        ctx.query.get_time_sec.return_value = ctx.time_sec
         widget.ctx = ctx
         analyzer = CrossingAnalyzer(widget)
 
@@ -1042,6 +1076,7 @@ class TestCrossingAnalyzerAdjustYLimits:
 
         # nonexistent 不在 data 中
         widget.ctx.data = {}
+        widget.ctx.query.get_signal_data.side_effect = lambda f: None
 
         analyzer._adjust_y_limits()
 
@@ -1057,6 +1092,8 @@ class TestCrossingAnalyzerAdjustYLimits:
             "sig2": np.array([-5.0, 5.0, 30.0]),   # min=-5, max=30
         }
         widget.ctx.time_sec = np.array([0.0, 50.0, 100.0])
+        widget.ctx.query.get_time_sec.return_value = widget.ctx.time_sec
+        widget.ctx.query.get_signal_data.side_effect = lambda f: widget.ctx.data.get(f)
         widget.axes[0].get_xlim.return_value = (0.0, 100.0)
 
         analyzer._adjust_y_limits()
@@ -1093,6 +1130,9 @@ class TestCrossingAnalyzerUpdateStats:
         ctx.time_sec = time_sec if time_sec is not None else np.linspace(0, 100, 101)
         ctx.data = data_map or {}
         ctx.get_label = lambda f: f
+        # DataQueryService mock
+        ctx.query.get_time_sec.return_value = ctx.time_sec
+        ctx.query.get_signal_data.side_effect = lambda f: ctx.data.get(f)
         widget.ctx = ctx
 
         canvas = MagicMock()

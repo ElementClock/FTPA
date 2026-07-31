@@ -20,7 +20,7 @@ from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QMessageBox
 
 from ..statistics import find_crossing_points
-from ..time_utils import format_time_seconds
+from ..utils.time_utils import format_time_seconds
 from ..config import CONFIG
 
 if TYPE_CHECKING:
@@ -35,7 +35,7 @@ class CrossingAnalyzer:
     """穿越分析 + 统计更新。"""
 
     def __init__(self, widget: PlotCanvasWidget) -> None:
-        self.w = widget
+        self._widget = widget
 
         # 穿越状态
         self.crossing_lines: list[Any] = []
@@ -83,7 +83,7 @@ class CrossingAnalyzer:
 
         委托给 _do_crossing_search() 执行核心逻辑。
         """
-        w = self.w
+        w = self._widget
         self.left_val = left_val
         self.left_mode = left_mode
         self.right_val = right_val
@@ -91,7 +91,7 @@ class CrossingAnalyzer:
         self.master_field = master_field
 
         ctx = w.ctx
-        if ctx is None or ctx.time_sec is None:
+        if ctx is None or ctx.query.get_time_sec() is None:
             return
 
         # 获取当前视图范围作为搜索窗口
@@ -122,9 +122,9 @@ class CrossingAnalyzer:
             True — 找到穿越点并成功缩放
             False — 未找到有效穿越点
         """
-        w = self.w
+        w = self._widget
         ctx = w.ctx
-        if ctx is None or ctx.time_sec is None:
+        if ctx is None or ctx.query.get_time_sec() is None:
             return False
 
         return self._do_crossing_search(t_start, t_end, allow_fallback=False)
@@ -146,15 +146,15 @@ class CrossingAnalyzer:
             True — 找到穿越点并成功缩放
             False — 未找到有效穿越点或参数不足
         """
-        w = self.w
+        w = self._widget
         ctx = w.ctx
-        if ctx is None or ctx.time_sec is None:
+        if ctx is None or ctx.query.get_time_sec() is None:
             return False
 
         if not self.master_field:
             return False
 
-        master_data = ctx.data.get(self.master_field)
+        master_data = ctx.query.get_signal_data(self.master_field)
         if master_data is None:
             return False
 
@@ -165,7 +165,7 @@ class CrossingAnalyzer:
         w.cancel_region_selection()
 
         # ── 在窗口内搜索穿越点（排除 NaN） ──
-        time_sec = ctx.time_sec
+        time_sec = ctx.query.get_time_sec()
         master_arr = np.asarray(master_data, dtype=float)
 
         # 选取窗口内的数据索引
@@ -191,7 +191,7 @@ class CrossingAnalyzer:
                                    ("right", (self.right_val, self.right_mode))]:
             pos = find_crossing_points(sub_sig, val, mode)
             if pos is not None:
-                t_point = float(sub_time[pos - 1])
+                t_point = float(sub_time[pos])
                 if side == "left":
                     left_x = t_point
                 else:
@@ -249,8 +249,8 @@ class CrossingAnalyzer:
         2. 自动调整每个子图 Y 轴适配可见数据
         3. 更新统计信息
         """
-        w = self.w
-        if w.ctx is None or w.ctx.time_sec is None or len(w.ctx.time_sec) < 2:
+        w = self._widget
+        if w.ctx is None or w.ctx.query.get_time_sec() is None or len(w.ctx.query.get_time_sec()) < 2:
             return
 
         # 取消待处理的防抖回调，避免过期回调在 reset 后触发
@@ -261,8 +261,8 @@ class CrossingAnalyzer:
         if self._initial_time_range is not None:
             t_start, t_end = self._initial_time_range
         else:
-            t_start = float(w.ctx.time_sec[0])
-            t_end = float(w.ctx.time_sec[-1])
+            t_start = float(w.ctx.query.get_time_sec()[0])
+            t_end = float(w.ctx.query.get_time_sec()[-1])
 
         for ax in w.axes:
             ax.set_xlim(t_start, t_end)
@@ -279,9 +279,9 @@ class CrossingAnalyzer:
 
     def save_initial_time_range(self) -> None:
         """记录当前数据的时间范围作为初始范围（数据加载时调用）。"""
-        w = self.w
-        if w.ctx is not None and w.ctx.time_sec is not None and len(w.ctx.time_sec) > 1:
-            self._initial_time_range = (float(w.ctx.time_sec[0]), float(w.ctx.time_sec[-1]))
+        w = self._widget
+        if w.ctx is not None and w.ctx.query.get_time_sec() is not None and len(w.ctx.query.get_time_sec()) > 1:
+            self._initial_time_range = (float(w.ctx.query.get_time_sec()[0]), float(w.ctx.query.get_time_sec()[-1]))
         else:
             self._initial_time_range = None
 
@@ -298,7 +298,7 @@ class CrossingAnalyzer:
 
     def _redraw_crossing_lines(self) -> None:
         """根据 _crossing_x 缓存重新绘制穿越线（不重新计算穿越点）。"""
-        w = self.w
+        w = self._widget
         self._clear_crossing_lines()
 
         if not self._crossing_x.get("left") and not self._crossing_x.get("right"):
@@ -328,11 +328,11 @@ class CrossingAnalyzer:
         对已排序的 time_sec 数组复杂度从 O(N) 降到 O(log N)，
         且无需创建临时 bool 数组。
         """
-        w = self.w
-        if w.ctx is None or not w.axes or w.ctx.time_sec is None:
+        w = self._widget
+        if w.ctx is None or not w.axes or w.ctx.query.get_time_sec() is None:
             return
 
-        time_sec = w.ctx.time_sec
+        time_sec = w.ctx.query.get_time_sec()
 
         for i, ax in enumerate(w.axes):
             try:
@@ -355,7 +355,7 @@ class CrossingAnalyzer:
             i_end = np.searchsorted(time_sec, t_end, side="right")
 
             for f in fields:
-                arr = w.ctx.data.get(f)
+                arr = w.ctx.query.get_signal_data(f)
                 if arr is None:
                     continue
                 seg = arr[i_start:i_end]
@@ -400,13 +400,13 @@ class CrossingAnalyzer:
           - 缩放后调用 on_canvas_zoom(event) 触发防抖
         """
         try:
-            w = self.w
+            w = self._widget
             # 前置检查：鼠标必须在子图内
             if getattr(event, "inaxes", None) is None:
                 return
             # 前置检查：必须有数据上下文
             ctx = w.ctx
-            if ctx is None or ctx.time_sec is None or len(ctx.time_sec) < 2:
+            if ctx is None or ctx.query.get_time_sec() is None or len(ctx.query.get_time_sec()) < 2:
                 return
             # 前置检查：必须有子图
             if not w.axes:
@@ -432,8 +432,8 @@ class CrossingAnalyzer:
 
             span = cur_end - cur_start
             # 数据时间范围
-            t_min = float(ctx.time_sec[0])
-            t_max = float(ctx.time_sec[-1])
+            t_min = float(ctx.query.get_time_sec()[0])
+            t_max = float(ctx.query.get_time_sec()[-1])
             data_span = t_max - t_min
 
             # span 异常时回退到 data_span
@@ -479,7 +479,7 @@ class CrossingAnalyzer:
           2. canvas.draw_idle() — 重绘
           3. update_stats() — 统计更新
         """
-        w = self.w
+        w = self._widget
         if self._zoom_timer is None:
             self._zoom_timer = QTimer()
             self._zoom_timer.setSingleShot(True)
@@ -493,20 +493,20 @@ class CrossingAnalyzer:
         如果 axes 数量在防抖期间发生了变化（如布局切换），
         则跳过过期回调，避免对已销毁的 axes 操作。
         """
-        if len(self.w.axes) != self._zoom_snapshot_axes_count:
+        if len(self._widget.axes) != self._zoom_snapshot_axes_count:
             return
         self._adjust_y_limits()
         # 根据当前视图刷新 Line2D 数据（缩放后数据可能需降采样/取消降采样）
-        self.w._renderer.refresh_viewport_data()
-        self.w.canvas.draw_idle()
+        self._widget._renderer.refresh_viewport_data()
+        self._widget.canvas.draw_idle()
         self.update_stats()
 
     # ── 统计更新 ──
 
     def update_stats(self) -> None:
         """根据当前时间窗口和穿越参数更新统计信息文本。"""
-        w = self.w
-        if w.ctx is None or not w.axes or w.ctx.time_sec is None:
+        w = self._widget
+        if w.ctx is None or not w.axes or w.ctx.query.get_time_sec() is None:
             return
 
         try:
@@ -519,7 +519,7 @@ class CrossingAnalyzer:
         lines.append(f"时间窗口: {format_time_seconds(t_start)} - {format_time_seconds(t_end)}")
 
         # 各子图的信号统计
-        time_sec = w.ctx.time_sec
+        time_sec = w.ctx.query.get_time_sec()
         i_start = np.searchsorted(time_sec, t_start, side="left")
         i_end = np.searchsorted(time_sec, t_end, side="right")
 
@@ -528,7 +528,7 @@ class CrossingAnalyzer:
             if not fields:
                 continue
             for f in fields:
-                arr = w.ctx.data.get(f)
+                arr = w.ctx.query.get_signal_data(f)
                 if arr is None:
                     continue
                 seg = arr[i_start:i_end]
@@ -540,11 +540,12 @@ class CrossingAnalyzer:
         for side, (val, mode) in [("左", (self.left_val, self.left_mode)),
                                    ("右", (self.right_val, self.right_mode))]:
             if self.master_field and w.ctx:
-                master_arr = np.asarray(w.ctx.data.get(self.master_field, []), dtype=float)
+                master_arr = np.asarray(w.ctx.query.get_signal_data(self.master_field) or [], dtype=float)
                 pos = find_crossing_points(master_arr, val, mode)
-                if pos is not None and w.ctx.time_sec is not None:
-                    x = w.ctx.time_sec[pos - 1]
-                    lines.append(f"穿越({side}): {mode} → {format_time_seconds(float(x))} ({self.master_field}={master_arr[pos - 1]:.4g})")
+                ts = w.ctx.query.get_time_sec()
+                if pos is not None and ts is not None:
+                    x = ts[pos]
+                    lines.append(f"穿越({side}): {mode} → {format_time_seconds(float(x))} ({self.master_field}={master_arr[pos]:.4g})")
                 else:
                     lines.append(f"穿越({side}): {mode} → 无")
 

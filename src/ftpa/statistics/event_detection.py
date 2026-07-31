@@ -7,8 +7,8 @@
 from __future__ import annotations
 
 import numpy as np
-from ..time_utils import time_to_seconds_array, parse_time_to_seconds
-from ..label_map import LabelMap
+from ..utils.time_utils import time_to_seconds_array, parse_time_to_seconds
+from ..data.label_map import LabelMap
 
 
 def compute_takeoff_landing_stats(
