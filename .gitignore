@@ -60,7 +60,9 @@ Thumbs.db
 *.xls
 *.m
 /.trae
+# 忽略数据 .txt 文件，但保留依赖清单 requirements.txt（P2-DOC-5）
 *.txt
+!requirements.txt
 /references
 /testdata
 CLAUDE.md

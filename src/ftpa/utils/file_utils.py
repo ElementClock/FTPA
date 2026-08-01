@@ -36,7 +36,11 @@ def detect_encoding(
         import chardet
     except ImportError:
         logger.debug("chardet 未安装，使用逐编码尝试方式")
-        return _try_encodings(file_path, fallback)
+        try:
+            return _try_encodings(file_path, fallback)
+        except OSError as e:
+            logger.warning("编码检测失败: %s，回退到 %s", e, fallback)
+            return fallback
 
     try:
         with open(file_path, "rb") as f:

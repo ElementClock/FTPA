@@ -102,6 +102,7 @@ class CrossingAnalyzer:
             t_start_sec = float(cur_xlim[0])
             t_end_sec = float(cur_xlim[1])
         except Exception:
+            logger.debug("xlim 获取失败，回退到数据时间范围", exc_info=True)
             t_start_sec, t_end_sec = ctx.get_time_range_sec()
 
         self._do_crossing_search(t_start_sec, t_end_sec)
@@ -513,6 +514,7 @@ class CrossingAnalyzer:
             xlim = w.axes[0].get_xlim()
             t_start, t_end = xlim[0], xlim[1]
         except Exception:
+            logger.debug("update_stats 获取 xlim 失败，跳过统计更新", exc_info=True)
             return
 
         lines: list[str] = []

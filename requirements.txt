@@ -1,14 +1,19 @@
-# Core dependencies
-numpy==2.5.1
-pandas==3.0.3
-python-dateutil==2.9.0.post0
-matplotlib==3.11.1
-scipy==1.18.0
-openpyxl==3.1.5
-plotly==6.9.0
-PySide6>=6.6.0
+# 核心依赖（与 pyproject.toml [project.dependencies] 保持一致，P2-DOC-4）
+# 兼容性上限约束防止主版本升级引入破坏性变更（P1-CONF-1）
+numpy>=2.5.0,<3.0.0
+pandas>=3.0.0,<4.0.0
+python-dateutil>=2.9.0,<3.0.0
+matplotlib>=3.11.0,<4.0.0
+scipy>=1.18.0,<2.0.0
+openpyxl>=3.1.0,<4.0.0
+plotly>=6.9.0,<7.0.0
+PySide6>=6.6.0,<7.0.0
+chardet>=5.0.0,<6.0.0
 
-# Development dependencies
+# 配置依赖（Python 3.10 回退，P2-DOC-3）
+tomli>=2.0.0;python_version<"3.11"
+
+# 开发依赖
 pytest>=9.0.0
 pytest-cov>=4.0.0
 black>=24.0.0

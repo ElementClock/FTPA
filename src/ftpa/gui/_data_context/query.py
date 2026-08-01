@@ -114,6 +114,18 @@ class DataQueryService:
         """获取指定字段的信号数据，不存在时返回 None。"""
         return self._data.get(field_name)
 
+    def get_raw_data(self) -> dict[str, np.ndarray]:
+        """获取已加载数据字典的只读视图。
+
+        返回底层 ``dict`` 的浅拷贝，调用方可安全迭代/读取，
+        但对返回值的修改不会影响 DataContext 内部状态。
+        替代直接访问 ``ctx.data``，遵循迪米特法则。
+
+        Returns:
+            ``dict[str, np.ndarray]`` 的浅拷贝；无数据时返回空 dict。
+        """
+        return dict(self._data)
+
     def get_time_sec(self) -> np.ndarray | None:
         """获取时间秒数组。"""
         return self._time_sec

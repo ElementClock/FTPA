@@ -107,3 +107,34 @@ def find_crossing_points(values: np.ndarray, threshold: float, mode: str) -> Opt
     if mode.startswith('First'):
         return int(cross_positions[0])
     return int(cross_positions[-1])
+
+
+def find_all_crossings(values: np.ndarray, threshold: float, direction: str) -> list[int]:
+    """返回所有穿越阈值的索引位置。
+
+    与 find_crossing_points 的区别：
+        - 返回全部穿越索引（列表），而非按 First/Last 取首个/末个；
+        - direction 取 'up'/'down'，down 使用 (prev >= threshold) & (next < threshold) 语义，
+          与 find_crossing_points 的 Down 模式 (prev > threshold) & (next <= threshold) 不同，
+          故二者保留各自实现以维持既有行为。
+
+    参数:
+        values: 输入序列
+        threshold: 阈值
+        direction: 'up' 或 'down'
+
+    返回:
+        穿越位置索引列表（0-based），穿越发生在 values[idx] 与 values[idx+1] 之间。
+        若不足两个数据点则返回空列表。
+    """
+    if len(values) < 2:
+        return []
+
+    if direction == 'up':
+        mask = (values[:-1] < threshold) & (values[1:] >= threshold)
+    elif direction == 'down':
+        mask = (values[:-1] >= threshold) & (values[1:] < threshold)
+    else:
+        raise ValueError(f"direction 必须为 'up' 或 'down'，收到 '{direction}'")
+
+    return np.where(mask)[0].tolist()

@@ -65,6 +65,7 @@ class MainWindow(QMainWindow):
         self.dry_run = dry_run
         self.data_context: DataContext | None = None
         self._load_thread = None
+        self._analysis_thread = None
         self._build_ui()
 
     def _build_ui(self):
@@ -601,30 +602,60 @@ class MainWindow(QMainWindow):
     # ── 系统分析 ──
 
     def _run_system_analysis(self):
-        """运行系统级分析（发动机/燃油/电源/CAS）。"""
+        """运行系统级分析（发动机/燃油/电源/CAS）——后台线程执行，避免冻结 GUI。"""
         if self.data_context is None or not self.data_context.is_loaded:
             QMessageBox.information(self, "系统分析", "请先加载数据后再运行系统分析。")
             return
 
+        from .worker import AnalysisWorker
+
+        # 清理上一次分析线程
+        old_thread = getattr(self, '_analysis_thread', None)
+        self._analysis_thread = None
+        if old_thread is not None:
+            try:
+                if old_thread.isRunning():
+                    old_thread.quit()
+                    old_thread.wait(3000)
+            except RuntimeError:
+                logger.warning("旧分析线程清理失败", exc_info=True)
+            old_thread = None
+
+        self.status_bar.showMessage("正在运行系统分析...")
+        self.apply_btn.setEnabled(False)
+
+        worker = AnalysisWorker(
+            self.data_context.query.get_raw_data(),
+            self.data_context.query.get_source_type(),
+            self,
+        )
+        worker.progress.connect(lambda p, m: self.status_bar.showMessage(m))
+        worker.analysis_finished.connect(self._on_analysis_finished)
+        self._analysis_thread = worker
+        worker.start()
+
+    def _on_analysis_finished(self, results, reports, error_msg: str):
+        """系统分析完成回调（主线程执行）。"""
+        if error_msg:
+            logger.error("系统分析失败: %s", error_msg)
+            QMessageBox.critical(self, "分析失败", error_msg)
+            self.status_bar.showMessage("系统分析失败")
+            self.apply_btn.setEnabled(True)
+            self._analysis_thread = None
+            return
+
         try:
-            from ..analysis import SystemAnalyzer
-
-            self.status_bar.showMessage("正在运行系统分析...")
-            self.apply_btn.setEnabled(False)
-
-            analyzer = SystemAnalyzer()
-            results = analyzer.analyze(self.data_context.data, self.data_context.query.get_source_type())
-            reports = analyzer.generate_reports(results)
-
             # 保存结果到 DataContext
-            self.data_context.analysis_result = results
+            if self.data_context is not None:
+                self.data_context.analysis_result = results
 
             # 显示报告
             report_lines = []
-            for name, text in reports.items():
-                if text:
-                    report_lines.append(text)
-                    report_lines.append("")
+            if reports:
+                for name, text in reports.items():
+                    if text:
+                        report_lines.append(text)
+                        report_lines.append("")
 
             if report_lines:
                 self.info_display.setPlainText("\n".join(report_lines))
@@ -634,12 +665,13 @@ class MainWindow(QMainWindow):
             self.status_bar.showMessage("系统分析完成")
             self._append_log("系统分析完成")
             self.apply_btn.setEnabled(True)
-
         except Exception as e:
-            logger.error("系统分析失败: %s", e)
-            QMessageBox.critical(self, "分析失败", f"系统分析出错：\n{e}")
+            logger.exception("系统分析完成后界面刷新失败")
+            QMessageBox.critical(self, "分析失败", f"系统分析结果展示出错：\n{e}")
             self.status_bar.showMessage("系统分析失败")
             self.apply_btn.setEnabled(True)
+        finally:
+            self._analysis_thread = None
 
     # ── 窗口关闭清理 ──
 
@@ -662,6 +694,17 @@ class MainWindow(QMainWindow):
             except RuntimeError:
                 logger.warning("加载线程清理失败", exc_info=True)
             self._load_thread = None
+
+        # 停止系统分析线程
+        analysis_thread = getattr(self, '_analysis_thread', None)
+        if analysis_thread is not None:
+            try:
+                if analysis_thread.isRunning():
+                    analysis_thread.quit()
+                    analysis_thread.wait(3000)
+            except RuntimeError:
+                logger.warning("分析线程清理失败", exc_info=True)
+            self._analysis_thread = None
 
         # 清空数据上下文，释放 numpy 数组内存
         if self.data_context is not None:

@@ -13,6 +13,8 @@ from typing import List, Tuple
 import numpy as np
 import pandas as pd
 
+from ..statistics.basic import compute_stat, find_all_crossings
+
 logger = logging.getLogger(__name__)
 
 
@@ -50,31 +52,34 @@ def find_threshold_crossings(
     threshold: float,
     direction: str = "up",
 ) -> List[int]:
-    """查找数组穿越阈值的索引。"""
-    if len(values) < 2:
-        return []
+    """查找数组穿越阈值的索引。
 
-    if direction == "up":
-        mask = (values[:-1] < threshold) & (values[1:] >= threshold)
-    elif direction == "down":
-        mask = (values[:-1] >= threshold) & (values[1:] < threshold)
-    else:
-        raise ValueError(f"direction 必须为 'up' 或 'down'，收到 '{direction}'")
-
-    return np.where(mask)[0].tolist()
+    委托 statistics.basic.find_all_crossings 实现，行为与原实现完全一致。
+    """
+    return find_all_crossings(values, threshold, direction)
 
 
 def compute_statistics(values: np.ndarray) -> dict:
-    """计算数组的统计特征。"""
+    """计算数组的统计特征。
+
+    委托 statistics.basic.compute_stat 计算 mean/min/max/points；
+    std 保留 ddof=0 语义（compute_stat 的 std 使用 ddof=1，二者语义不同，故本地计算）；
+    median 由 numpy 直接计算。
+    """
     if len(values) == 0:
         return {"mean": 0.0, "std": 0.0, "min": 0.0, "max": 0.0,
                 "median": 0.0, "count": 0}
 
+    mean_v, _ = compute_stat(values, 'mean')
+    min_v, _ = compute_stat(values, 'min')
+    max_v, _ = compute_stat(values, 'max')
+    count_v, _ = compute_stat(values, 'points')
+
     return {
-        "mean": float(np.mean(values)),
+        "mean": float(mean_v),
         "std": float(np.std(values)),
-        "min": float(np.min(values)),
-        "max": float(np.max(values)),
+        "min": float(min_v),
+        "max": float(max_v),
         "median": float(np.median(values)),
-        "count": len(values),
+        "count": int(count_v),
     }

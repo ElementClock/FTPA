@@ -3,7 +3,7 @@
 提供单变量统计、分组统计、起降统计、参数统计和阈值穿越分析。
 """
 
-from .basic import compute_stat, find_crossing_points, StatType
+from .basic import compute_stat, find_crossing_points, find_all_crossings, StatType
 from .multi import (
     VarSpec, GroupSpec,
     compute_var_stats_typed, show_group_stats_typed,
@@ -30,6 +30,7 @@ __all__ = [
     'crossing_analysis',
     'crossing_analysis_without_labelmap',
     'find_crossing_points',
+    'find_all_crossings',
     'generate_data_summary',
     'print_data_summary',
 ]

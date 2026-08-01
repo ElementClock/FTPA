@@ -16,6 +16,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING
 
 from PySide6.QtCore import QEvent, QPoint, Qt, QObject, QMimeData
@@ -25,6 +26,8 @@ from PySide6.QtWidgets import QTreeWidgetItem
 if TYPE_CHECKING:
     from .panel_plot import PlotCanvasWidget
     from .widgets import ParameterTreeWidget
+
+logger = logging.getLogger(__name__)
 
 # ── 自定义 MIME 类型 ──
 MIME_TYPE = "application/x-ftpa-field-name"
@@ -228,6 +231,7 @@ class CanvasDropFilter(QObject):
             inv = w.figure.transFigure.inverted()
             fig_x, fig_y = inv.transform((display_x, display_y))
         except Exception:
+            logger.debug("display→figure 坐标转换失败", exc_info=True)
             return None
 
         # 遍历 Axes Bbox 命中测试

@@ -14,9 +14,10 @@ import numpy as np
 import pandas as pd
 
 from . import param_extract
-from ..computing.weight_cg import add_weight_cg_to_data
+from .enrichment import add_weight_cg_to_data  # P1-ARCH-3: 数据富化函数迁移至 data 层
 from .exporter import export_data, generate_data_summary
 from .label_map import LabelMap
+from ..utils.file_utils import is_safe_path
 from ..utils.time_utils import select_time_window
 
 logger = logging.getLogger(__name__)
@@ -66,6 +67,12 @@ def batch_process_files(file_pattern: str,
         try:
             data = _load_and_prepare(file_path, lm)
             output_path = os.path.join(output_dir, file_base)
+
+            # 安全校验：防止恶意文件名导致路径遍历逃逸输出目录（P1-SEC-1）
+            if not is_safe_path(output_dir, output_path):
+                raise ValueError(
+                    f"不安全的输出路径: {output_path}（文件名可能包含路径遍历字符）"
+                )
 
             custom_result = None
             if process_func:
@@ -192,6 +199,11 @@ def batch_export_summaries(file_pattern: str,
                           excel_file: str,
                           output_file: str = 'batch_summary.csv'):
     """批量导出多个文件的数据摘要。"""
+    # 安全校验：防止路径遍历攻击（P1-SEC-1）
+    base_dir = os.path.dirname(output_file) or os.getcwd()
+    if not is_safe_path(base_dir, output_file):
+        raise ValueError(f"不安全的输出路径: {output_file}")
+
     files = glob.glob(file_pattern)
 
     if not files:

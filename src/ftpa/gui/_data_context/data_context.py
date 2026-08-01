@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import logging
 import os
+import warnings
 from pathlib import Path
 
 import numpy as np
@@ -25,6 +26,23 @@ from .query import DataQueryService
 from .statistics_service import StatisticsService
 
 logger = logging.getLogger(__name__)
+
+
+def _warn_deprecated(prop_name: str, replacement: str, *, kind: str = "access") -> None:
+    """发出 DeprecationWarning，提示外部代码迁移到 query 服务。
+
+    Args:
+        prop_name: 被弃用的属性名（如 ``"data"``）。
+        replacement: 推荐的替代调用（如 ``"ctx.query.get_raw_data()"``）。
+        kind: ``"access"`` 或 ``"setter"``，用于区分读写场景。
+    """
+    action = "写入" if kind == "setter" else "访问"
+    warnings.warn(
+        f"DataContext.{prop_name} 的{action}已弃用，请改用 {replacement}；"
+        f"该属性仅保留向后兼容，未来版本可能移除。",
+        DeprecationWarning,
+        stacklevel=3,
+    )
 
 DATA_DIRS = [
     Path(__file__).resolve().parents[2] / "data",
@@ -83,68 +101,113 @@ class DataContext:
         """字段解析器（向后兼容属性）。"""
         return self._field_resolver
 
-    # -- 向后兼容属性 --
+    # -- 向后兼容属性（已弃用，请使用 ctx.query 下的方法）--
 
     @property
     def data(self) -> dict:
-        """已加载数据字典。推荐使用 query.get_signal_data()。"""
+        """已加载数据字典。
+
+        .. deprecated:: 1.1.0
+            请改用 ``ctx.query.get_raw_data()`` 获取全部数据，
+            或 ``ctx.query.get_signal_data(field)`` 获取单个信号。
+        """
+        _warn_deprecated("data", "ctx.query.get_raw_data() / ctx.query.get_signal_data(field)")
         return self._data
 
     @data.setter
     def data(self, value: dict) -> None:
+        _warn_deprecated("data", "ctx.load() / ctx.unload()", kind="setter")
         self._data = value
 
     @property
     def time_sec(self) -> np.ndarray | None:
-        """时间秒数组。推荐使用 query.get_time_sec()。"""
+        """时间秒数组。
+
+        .. deprecated:: 1.1.0
+            请改用 ``ctx.query.get_time_sec()``。
+        """
+        _warn_deprecated("time_sec", "ctx.query.get_time_sec()")
         return self._time_sec
 
     @time_sec.setter
     def time_sec(self, value: np.ndarray | None) -> None:
+        _warn_deprecated("time_sec", "ctx.load() / ctx.unload()", kind="setter")
         self._time_sec = value
 
     @property
     def time_vec(self) -> np.ndarray | None:
-        """原始时间向量。推荐使用 query.get_time_vec()。"""
+        """原始时间向量。
+
+        .. deprecated:: 1.1.0
+            请改用 ``ctx.query.get_time_vec()``。
+        """
+        _warn_deprecated("time_vec", "ctx.query.get_time_vec()")
         return self._time_vec
 
     @time_vec.setter
     def time_vec(self, value: np.ndarray | None) -> None:
+        _warn_deprecated("time_vec", "ctx.load() / ctx.unload()", kind="setter")
         self._time_vec = value
 
     @property
     def lm(self) -> LabelMap | None:
+        """标签映射。
+
+        .. deprecated:: 1.1.0
+            请改用 ``ctx.query.get_label_map()``，或通过 ``ctx.field_resolver``
+            间接访问标签映射。
+        """
+        _warn_deprecated("lm", "ctx.query.get_label_map() / ctx.field_resolver")
         return self._lm
 
     @lm.setter
     def lm(self, value: LabelMap | None) -> None:
+        _warn_deprecated("lm", "ctx.load() / ctx.unload()", kind="setter")
         self._lm = value
 
     @property
     def data_path(self) -> str:
-        """数据文件路径。推荐使用 query.get_data_path()。"""
+        """数据文件路径。
+
+        .. deprecated:: 1.1.0
+            请改用 ``ctx.query.get_data_path()``。
+        """
+        _warn_deprecated("data_path", "ctx.query.get_data_path()")
         return self._data_path
 
     @data_path.setter
     def data_path(self, value: str) -> None:
+        _warn_deprecated("data_path", "ctx.load() / ctx.unload()", kind="setter")
         self._data_path = value
 
     @property
     def excel_path(self) -> str:
-        """映射表文件路径。推荐使用 query.get_excel_path()。"""
+        """映射表文件路径。
+
+        .. deprecated:: 1.1.0
+            请改用 ``ctx.query.get_excel_path()``。
+        """
+        _warn_deprecated("excel_path", "ctx.query.get_excel_path()")
         return self._excel_path
 
     @excel_path.setter
     def excel_path(self, value: str) -> None:
+        _warn_deprecated("excel_path", "ctx.load() / ctx.unload()", kind="setter")
         self._excel_path = value
 
     @property
     def source_type(self) -> str:
-        """数据源类型。推荐使用 query.get_source_type()。"""
+        """数据源类型。
+
+        .. deprecated:: 1.1.0
+            请改用 ``ctx.query.get_source_type()``。
+        """
+        _warn_deprecated("source_type", "ctx.query.get_source_type()")
         return self._source_type
 
     @source_type.setter
     def source_type(self, value: str) -> None:
+        _warn_deprecated("source_type", "ctx.load() / ctx.unload()", kind="setter")
         self._source_type = value
 
     # -- 静态方法 --
@@ -160,6 +223,7 @@ class DataContext:
             from urllib.parse import unquote
             decoded = unquote(path_str)
         except Exception:
+            logger.debug("URL 解码失败，使用原始路径: %s", path_str, exc_info=True)
             decoded = path_str
         if ".." in Path(decoded).parts:
             logger.warning("路径包含遍历组件（..），已拒绝: %s", path_value)

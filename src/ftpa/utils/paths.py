@@ -5,7 +5,7 @@
 
 import os
 from pathlib import Path
-from ..data import EXCEL_FILENAME
+from ..config import EXCEL_FILENAME  # P1-ARCH-2: 从顶层 config 导入，避免 utils 反向依赖 data
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]  # src/ftpa/utils/ → 项目根目录

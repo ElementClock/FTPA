@@ -1,0 +1,53 @@
+# 变更日志 (Changelog)
+
+本项目所有显著变更均会记录在此文件中。
+
+格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
+并遵循 [语义化版本](https://semver.org/lang/zh-CN/spec/v2.0.0.html)。
+
+## [1.0.1] - 2026-08-01
+
+本次发布为架构审计修复版本：归档遗留 CLI、将 GUI 确立为唯一入口，并将数据层重构为以 `DataContext` Facade 为核心、由可插拔子服务协作的结构。同时消除多处跨层 / 循环依赖，并修复若干安全与质量问题。
+
+### Added
+
+- **自定义异常层次** `errors.py`：`FtpaError` → `LoadError` → 4 个子类（`FileNotFoundLoadError` / `FormatLoadError` / `ResourceLoadError` / `LabelMapLoadError`）；`loading.py` 中的 Loader 将内置异常转换为此层次（`raise X from e`），`worker.py` 按子类映射为用户友好消息。
+- **`data/summary.py`、`data/enrichment.py`**：分别承接 `generate_data_summary` / `print_data_summary` 与 `add_weight_cg_to_data`，消除 `data ↔ statistics` 循环依赖和 `computing → data` 跨层依赖。
+- **`gui/_data_context/` Facade 子包**：7 个子服务（`loading` / `query` / `export_service` / `plot_data_service` / `statistics_service` / `field_resolver` / `protocols`）；加载采用 Strategy 模式（`TxtLoader` / `CsvLoader` 注册到 `LOADERS`）。
+- **`gui/_downsampler.py`**：向量化 min-max 降采样算法（`np.reshape` + `nanmin` / `nanmax`，500K 点 <1ms）。
+- **`gui/_pan_ctrl.py`、`gui/_region_ctrl.py`、`gui/_drop_ctrl.py`**：分别承担左键拖拽平移、右键框选时间区间、参数树拖放到子图三项交互。
+- **`gui/worker.py` `AnalysisWorker`**：系统分析后台线程（执行 `SystemAnalyzer.analyze()` + `generate_reports()`），防止大数据集分析时冻结 GUI 主线程。
+- **`DataContext.query.get_raw_data()`**：只读数据访问入口（含 `get_signal_data()` / `get_time_sec()` / `get_time_vec()` 等），遵循迪米特法则。
+- **7 个遗留属性的 `DeprecationWarning`**：`data` / `time_sec` / `time_vec` / `lm` / `data_path` / `excel_path` / `source_type`，引导迁移到 `ctx.query.*` 方法。
+- **依赖兼容性上限约束（P1-CONF-1）**：`pyproject.toml` 与 `requirements.txt` 同步使用 `>=X,<Y` 形式，防止主版本升级引入破坏性变更。
+- **`chardet`、`tomli` 依赖**：`chardet` 用于文件编码自动检测（可选带回退）；`tomli` 作为 Python 3.10 的 TOML 解析回退。
+- **`computing/aircraft.py`**：AG1007 架次飞机参数常量，更换机型只需修改此文件。
+- **`gui/_font_config.py`**：Matplotlib CJK 字体配置（线程安全），从已归档的 `plotting.py` 提取。
+- **`utils/log_utils.py`**：纯 Python 日志配置（零 Qt 依赖）。
+- **`ftpa_config.toml`**：项目级 TOML 配置文件（支持用户级 `~/.ftpa/ftpa_config.toml` 覆盖）。
+
+### Changed
+
+- **DataContext 重构**：从 582 行 God Object 重构为 240 行 Facade（`gui/_data_context/data_context.py`）+ 子服务；原 `gui/services.py` 缩减为 32 行纯重导出文件，保持向后兼容。
+- **CLI 模块归档**：`pipeline.py`、`plotting.py`、`batch_processor.py`、旧 CLI 版 `main.py` 迁移至 `references/cli/`；`main.py` 改为纯 GUI 入口（默认启动 GUI，支持 `--dry-run` 无界面验证）。
+- **`constants.py` 合并到 `config.py`**：采用 frozen dataclass（`Config` / `ZoomConfig` / `PlotConfig` / `DataConfig` / `GuiConfig`）+ TOML 文件配置；飞机参数常量拆分到 `computing/aircraft.py`。
+- **模块位置迁移**：`label_map.py` / `exporter.py` / `column_config.py` → `data/`；`time_utils.py` / `log_utils.py` → `utils/`。
+- **`statistics/multi.py` 消除代码重复**：`statistics_params` 与 `crossing_analysis` 的 with/without-labelmap 分支合并为统一实现（`_statistics_params_impl` / `_crossing_analysis_impl`）。
+- **`utils/paths.py` 跨层依赖修复**：`EXCEL_FILENAME` 上移到 `config.py`，`utils` 不再反向依赖 `data` 子包。
+- **文档同步更新**：`README.md`、`CLAUDE.md` 重写以反映 Facade 架构与 GUI 唯一入口。
+
+### Fixed
+
+- **Zip Slip 路径遍历漏洞**：`data/io.py` 的 ZIP 解压添加路径遍历校验（拒绝 `..` 组件、绝对路径、逃逸解压目录的成员）。
+- **`data ↔ statistics` 循环依赖**：`generate_data_summary` / `print_data_summary` 下沉到 `data/summary.py`。
+- **`utils/paths.py` 跨层依赖**：`EXCEL_FILENAME` 移至 `config.py`，消除 `utils → data` 反向依赖。
+- **GUI 模块静默异常**：5 处裸 `except` 添加 `logger.debug` 记录（含异常堆栈），便于问题定位。
+- **`base_oli` 拼写错误**：修正为 `BASE_OIL`。
+- **`.gitignore` `*.txt` 规则过宽**：添加 `!requirements.txt` 例外，保护依赖清单不被误忽略。
+
+### Removed
+
+- **4 个未使用的 `*_data_processor.py` 死代码文件**：从 `analysis/` 各子系统中删除。
+- **CLI 模式**：`verify` / `chunked` / `analysis` / `stats` / `interactive` 及对应的 `--mode` / `--gui` / `--nrows` / `--chunksize` / `--max-chunks` 等参数（随 CLI 模块归档至 `references/cli/`）。
+- **根目录松散模块**：`label_map.py` / `exporter.py` / `column_config.py` / `time_utils.py`（已迁入子包）。
+- **`constants.py`**：拆分合并到 `config.py` 与 `computing/aircraft.py`。

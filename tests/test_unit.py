@@ -280,11 +280,11 @@ class TestComputing:
         oil_rout = np.array([1000.0])
         base_weight = 50000.0
         base_rel_cg = 25.0
-        base_oli = 4000.0
+        base_oil = 4000.0
         
         total_weight, rel_cg = compute_total_weight_rel_cg(
             oil_lout, oil_lin, oil_rin, oil_rout,
-            base_weight, base_rel_cg, base_oli
+            base_weight, base_rel_cg, base_oil
         )
         
         assert total_weight is not None
@@ -298,14 +298,14 @@ class TestComputing:
         oil_lin = np.array([1000.0])
         oil_rin = np.array([1000.0])
         oil_rout = np.array([1000.0])
-        base_weight = 4000.0  # 等于 base_oli
+        base_weight = 4000.0  # 等于 base_oil
         base_rel_cg = 25.0
-        base_oli = 4000.0
+        base_oil = 4000.0
         
         with pytest.raises(ValueError, match="零油重量必须为正数"):
             compute_total_weight_rel_cg(
                 oil_lout, oil_lin, oil_rin, oil_rout,
-                base_weight, base_rel_cg, base_oli
+                base_weight, base_rel_cg, base_oil
             )
     
     def test_compute_total_weight_rel_cg_negative_empty_weight(self):
@@ -314,14 +314,14 @@ class TestComputing:
         oil_lin = np.array([1000.0])
         oil_rin = np.array([1000.0])
         oil_rout = np.array([1000.0])
-        base_weight = 3000.0  # 小于 base_oli
+        base_weight = 3000.0  # 小于 base_oil
         base_rel_cg = 25.0
-        base_oli = 4000.0
+        base_oil = 4000.0
         
         with pytest.raises(ValueError, match="零油重量必须为正数"):
             compute_total_weight_rel_cg(
                 oil_lout, oil_lin, oil_rin, oil_rout,
-                base_weight, base_rel_cg, base_oli
+                base_weight, base_rel_cg, base_oil
             )
     
     def test_compute_fitted_circle_radius(self):

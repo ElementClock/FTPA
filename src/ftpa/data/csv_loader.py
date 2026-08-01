@@ -402,9 +402,9 @@ def _find_time_column(df: pd.DataFrame) -> Optional[str]:
         if candidate in df.columns:
             return candidate
 
-    # 按 dtype 查找
+    # 按 dtype 查找（pandas 3.0 StringDtype 等非 numpy dtype 需用 pandas API 判断）
     for col in df.columns:
-        if np.issubdtype(df[col].dtype, np.datetime64):
+        if pd.api.types.is_datetime64_any_dtype(df[col]):
             return col
 
     return None

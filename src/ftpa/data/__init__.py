@@ -4,8 +4,9 @@
 """
 
 # 数据加载与文件参数
-EXCEL_FILENAME = "参数名.xlsx"     # 标签映射 Excel 文件名
-CHUNK_SIZE = 10000                 # 分块读取每块行数
+# EXCEL_FILENAME 集中定义于 config（顶层），供 utils 与 data 共享，避免 utils 反向依赖 data（P1-ARCH-2）
+from ..config import EXCEL_FILENAME  # noqa: E402  标签映射 Excel 文件名
+CHUNK_SIZE = 10000                   # 分块读取每块行数
 
 from .column_config import get_replacement_rules, apply_replacement_rules
 from .label_map import LabelMap
@@ -14,7 +15,9 @@ from .io import read_data_file, resolve_zip_file
 from .cache import FileCache, _file_cache
 from .csv_loader import csv_param_extract
 from .batch import batch_process_files, batch_analyze_statistics, batch_export_summaries
-from .exporter import export_data, export_statistics, generate_data_summary, print_data_summary
+from .enrichment import add_weight_cg_to_data  # P1-ARCH-3: 自 computing 迁入的数据富化函数
+from .summary import generate_data_summary, print_data_summary
+from .exporter import export_data, export_statistics
 
 __all__ = [
     'EXCEL_FILENAME',
@@ -30,6 +33,7 @@ __all__ = [
     'batch_process_files',
     'batch_analyze_statistics',
     'batch_export_summaries',
+    'add_weight_cg_to_data',
     'export_data',
     'export_statistics',
     'generate_data_summary',

@@ -119,11 +119,11 @@ def test_compute_total_weight_rel_cg():
     oil_rout = np.array([1000.0])
     base_weight = 45000.0  # kg
     base_rel_cg = 25.0     # %
-    base_oli = 4400.0      # kg
+    base_oil = 4400.0      # kg
     
     total_weight, rel_cg = compute_total_weight_rel_cg(
         oil_lout, oil_lin, oil_rin, oil_rout,
-        base_weight, base_rel_cg, base_oli
+        base_weight, base_rel_cg, base_oil
     )
     
     print(f'输入参数:')
@@ -133,7 +133,7 @@ def test_compute_total_weight_rel_cg():
     print(f'  右外油量: {oil_rout[0]} kg')
     print(f'  任务重量: {base_weight} kg')
     print(f'  任务重心: {base_rel_cg} %')
-    print(f'  任务油量: {base_oli} kg')
+    print(f'  任务油量: {base_oil} kg')
     print(f'\n输出结果:')
     print(f'  总重量: {total_weight[0]:.2f} kg')
     print(f'  相对重心: {rel_cg[0]:.2f} %')

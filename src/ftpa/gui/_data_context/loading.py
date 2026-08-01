@@ -67,7 +67,7 @@ class TxtLoader:
             lm: LabelMap | None = None
             if os.path.exists(excel_path):
                 try:
-                    from ...computing.weight_cg import add_weight_cg_to_data
+                    from ...data.enrichment import add_weight_cg_to_data  # P1-ARCH-3: 迁移至 data 层
                     lm = LabelMap(excel_path)
                     add_weight_cg_to_data(raw, lm)
                 except LabelMapLoadError:

@@ -137,11 +137,11 @@ def test_computing():
     
     base_weight = 50000.0
     base_rel_cg = 25.0
-    base_oli = 4000.0
+    base_oil = 4000.0
     
     total_weight, rel_cg = compute_total_weight_rel_cg(
         oil_lout, oil_lin, oil_rin, oil_rout,
-        base_weight, base_rel_cg, base_oli
+        base_weight, base_rel_cg, base_oil
     )
     
     assert len(total_weight) == 3

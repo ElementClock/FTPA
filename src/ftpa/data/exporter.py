@@ -10,8 +10,8 @@ import numpy as np
 import pandas as pd
 from typing import Dict, Union, Optional
 from datetime import datetime
-from ..utils.time_utils import format_duration_chinese
-from ..statistics import generate_data_summary, print_data_summary  # noqa: F401 — re-exports
+from .summary import generate_data_summary, print_data_summary  # noqa: F401 — re-exports
+from ..utils.file_utils import is_safe_path
 
 logger = logging.getLogger(__name__)
 
@@ -39,8 +39,13 @@ def export_data(data: Dict[str, np.ndarray],
         >>> export_data(data, 'output/result', output_format='parquet')
         'output/result.parquet'
     """
-    # 确保输出目录存在
+    # 安全校验：防止路径遍历攻击（P1-SEC-1）
     output_dir = os.path.dirname(output_path)
+    base_dir = output_dir or os.getcwd()
+    if not is_safe_path(base_dir, output_path):
+        raise ValueError(f"不安全的输出路径: {output_path}")
+
+    # 确保输出目录存在
     if output_dir and not os.path.exists(output_dir):
         os.makedirs(output_dir)
 
@@ -156,7 +161,12 @@ def export_statistics(stats: Dict, output_path: str, output_format: str = 'csv')
     返回:
         实际保存的文件路径
     """
+    # 安全校验：防止路径遍历攻击（P1-SEC-1）
     output_dir = os.path.dirname(output_path)
+    base_dir = output_dir or os.getcwd()
+    if not is_safe_path(base_dir, output_path):
+        raise ValueError(f"不安全的输出路径: {output_path}")
+
     if output_dir and not os.path.exists(output_dir):
         os.makedirs(output_dir)
 

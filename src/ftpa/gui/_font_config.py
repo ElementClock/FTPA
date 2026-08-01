@@ -3,9 +3,12 @@
 此模块独立于 CLI plotting 模块，消除 GUI 对 CLI 的依赖。
 """
 
+import logging
 import threading
 
 import matplotlib.pyplot as plt
+
+logger = logging.getLogger(__name__)
 
 _FONT_CONFIGURED = False
 _FONT_CACHED = None
@@ -38,6 +41,7 @@ def configure_display_font():
             import matplotlib.font_manager as fm
             available_fonts = {font.name for font in fm.fontManager.ttflist}
         except Exception:
+            logger.debug("字体管理器加载失败，回退到空字体集", exc_info=True)
             available_fonts = set()
 
         selected_font = None

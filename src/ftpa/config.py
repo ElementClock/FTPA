@@ -12,6 +12,11 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
+# ── 项目级共享常量 ──
+# 标签映射 Excel 文件名。定义于 config（顶层）以供 utils 与 data 共享，
+# 避免底层 utils 反向依赖 data 子包（P1-ARCH-2）。
+EXCEL_FILENAME = "参数名.xlsx"
+
 # ── TOML 解析兼容层 ──
 try:
     import tomllib  # Python 3.11+
@@ -51,6 +56,7 @@ class DataConfig:
     trim_head: int = 50
     trim_tail: int = 50
     cache_max_size: int = 5
+    cache_max_memory_mb: int = 500
     max_rows: int = 5_000_000
 
 

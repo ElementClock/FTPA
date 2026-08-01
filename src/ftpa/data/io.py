@@ -27,12 +27,36 @@ def resolve_zip_file(filepath: str) -> tuple[str, bool]:
     if not filepath.lower().endswith('.zip'):
         return filepath, False
 
-    # 解压到临时目录
-    temp_dir = tempfile.mkdtemp()
+    # 解压到临时目录（取绝对路径，便于后续做路径逃逸校验）
+    temp_dir = os.path.abspath(tempfile.mkdtemp())
     with zipfile.ZipFile(filepath, 'r') as zip_ref:
         # 获取第一个非目录文件
         for info in zip_ref.infolist():
             if not info.is_dir():
+                # 安全校验：防止 Zip Slip 路径遍历漏洞
+                # ZIP 规范使用正斜杠，这里统一反斜杠后按组件精确判断
+                member_name = info.filename.replace('\\', '/')
+                parts = member_name.split('/')
+                # 拒绝包含 ".." 上跳组件的文件名（精确匹配组件，避免误伤 my..file.txt）
+                if any(part == '..' for part in parts):
+                    raise ValueError(
+                        f"ZIP 内文件名包含路径遍历序列 '..': {info.filename!r}"
+                    )
+                # 拒绝绝对路径：Unix 风格 "/etc/passwd" 或 Windows 盘符 "C:\\evil"
+                if member_name.startswith('/') or (
+                    len(member_name) >= 2 and member_name[1] == ':'
+                ):
+                    raise ValueError(
+                        f"ZIP 内文件名为绝对路径: {info.filename!r}"
+                    )
+                # 二次防御：拼接后的绝对路径必须落在 temp_dir 之内
+                target_path = os.path.abspath(os.path.join(temp_dir, *parts))
+                if target_path != temp_dir and not target_path.startswith(
+                    temp_dir + os.sep
+                ):
+                    raise ValueError(
+                        f"ZIP 内文件名试图逃逸出解压目录: {info.filename!r}"
+                    )
                 zip_ref.extract(info, temp_dir)
                 return os.path.join(temp_dir, info.filename), True
 
