@@ -10,7 +10,7 @@ import logging
 
 from PySide6.QtCore import QThread, Signal
 
-from ...errors import (
+from ..errors import (
     FtpaError,
     FileNotFoundLoadError,
     FormatLoadError,
