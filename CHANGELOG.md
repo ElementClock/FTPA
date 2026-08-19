@@ -25,6 +25,7 @@
 - **JSON 数据导出**：`export_data()` 支持 `output_format='json'`，并支持 `gzip` 压缩；导出面板在 JSON 格式下自动将 `snappy` 重置为“无”。
 - **插件进度回调透传**：`PluginManager.execute_analysis()` 将 `progress_callback` 传给各插件 `analyze()`。
 - **回归测试**：新增 `tests/test_review_fixes.py`，覆盖小 CSV 加载、全时段窗口、圆拟合参数顺序、摘要通道数、发动机列去重、插件进度回调透传。
+- **桌面启动脚本**：新增 `FTPA_GUI.bat`，Windows 下双击即可直接启动 GUI，自动使用项目虚拟环境 Python 并设置 `PYTHONPATH`。
 
 ### Changed
 

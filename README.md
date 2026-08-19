@@ -40,6 +40,12 @@ python -m ftpa.main --dry-run
 ftpa
 ```
 
+### 桌面端直接运行
+
+Windows 下可直接双击项目根目录的 `FTPA_GUI.bat` 启动 GUI，
+脚本会自动使用 `.venv\Scripts\python.exe`（不存在时回退到系统 `python`），
+无需手动输入命令。
+
 ## 使用方法
 
 ### GUI 模式（默认）
@@ -195,6 +201,7 @@ FTPA/
 │
 ├── data/                         # 数据文件目录（当前含参数名.xlsx 与示例 TXT）
 │
+├── FTPA_GUI.bat                  # Windows 桌面双击启动脚本（直接运行 GUI）
 ├── pyproject.toml                # Python 项目配置
 ├── requirements.txt              # 依赖清单（带兼容性上限）
 ├── ftpa_config.toml              # 项目级 TOML 配置（可选）
