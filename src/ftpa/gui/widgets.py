@@ -4,6 +4,8 @@
 
 from __future__ import annotations
 
+import re
+
 from PySide6.QtCore import Qt, QSortFilterProxyModel, QStringListModel, Signal
 from PySide6.QtGui import QStandardItem, QStandardItemModel
 from PySide6.QtWidgets import (
@@ -287,6 +289,15 @@ class ParameterTreeWidget(QWidget):
         self.param_selected.emit(field_name)
 
 
+# statistics_params() 输出格式：
+#   信号名  起始=1, 结束=3, 最小=1, 最大=3, 平均=2, 标准差=1, 点数=3
+_STAT_LINE_RE = re.compile(
+    r"^(?P<label>.*?)\s*起始=(?P<start>[^,]+), 结束=(?P<end>[^,]+), "
+    r"最小=(?P<min>[^,]+), 最大=(?P<max>[^,]+), 平均=(?P<mean>[^,]+), "
+    r"标准差=(?P<std>[^,]+), 点数=(?P<points>[^,]+)$"
+)
+
+
 class StatsTableWidget(QTableWidget):
     """参数统计结果表格（7 列预定义）。"""
 
@@ -301,18 +312,33 @@ class StatsTableWidget(QTableWidget):
         self.setAlternatingRowColors(True)
 
     def populate(self, stats_lines: list[str]):
-        """从 statistics_params 的字符串列表填充表格。"""
+        """从 statistics_params 的字符串列表填充表格。
+
+        兼容 statistics_params() 的现有输出格式：
+        ``信号名  起始=..., 结束=..., 最小=..., 最大=..., 平均=..., 标准差=..., 点数=...``
+        """
         self.setRowCount(0)
         for line in stats_lines:
-            # 格式例如: "信号名  起始值  结束值  最小值  最大值  平均值  标准差  点数"
-            parts = line.split("\t")
-            if len(parts) < 2:
-                continue
+            m = _STAT_LINE_RE.match(line)
+            if m:
+                parts = [
+                    m.group("label").strip(),
+                    m.group("start").strip(),
+                    m.group("end").strip(),
+                    m.group("min").strip(),
+                    m.group("max").strip(),
+                    m.group("mean").strip(),
+                    m.group("std").strip(),
+                    m.group("points").strip(),
+                ]
+            else:
+                # 非标准行（如错误提示）整行放入第一列
+                parts = [line.strip()]
             row = self.rowCount()
             self.insertRow(row)
             for col, part in enumerate(parts):
                 if col < self.columnCount():
-                    self.setItem(row, col, QTableWidgetItem(part.strip()))
+                    self.setItem(row, col, QTableWidgetItem(part))
 
     def clear_data(self):
         self.setRowCount(0)

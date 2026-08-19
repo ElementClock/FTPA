@@ -45,9 +45,9 @@ def _warn_deprecated(prop_name: str, replacement: str, *, kind: str = "access") 
     )
 
 DATA_DIRS = [
-    Path(__file__).resolve().parents[2] / "data",
-    Path(__file__).resolve().parents[2] / "data" / "raw",
-    Path(__file__).resolve().parents[2] / "testdata",
+    Path(__file__).resolve().parents[4] / "data",
+    Path(__file__).resolve().parents[4] / "data" / "raw",
+    Path(__file__).resolve().parents[4] / "testdata",
 ]
 
 
@@ -340,7 +340,7 @@ class DataContext:
         from ...computing import compute_fitted_circle_radius
         if not self._loaded or self._time_vec is None:
             return float("nan")
-        return compute_fitted_circle_radius(self._time_vec, t_start, t_end, self._data[lat_field], self._data[lon_field])
+        return compute_fitted_circle_radius(self._time_vec, t_start, t_end, self._data[lon_field], self._data[lat_field])
 
     # -- 导出（委托给 export_svc）--
 

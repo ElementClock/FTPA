@@ -1,8 +1,9 @@
 """
 数据导出模块
-支持多种格式的数据导出：CSV、Parquet、HDF5
+支持多种格式的数据导出：CSV、Parquet、HDF5、Excel、JSON
 """
 
+import gzip
 import os
 import json
 import logging
@@ -27,10 +28,10 @@ def export_data(data: Dict[str, np.ndarray],
     参数:
         data: 数据字典，包含 TIME 和其他信号
         output_path: 输出文件路径（不含扩展名）
-        format: 导出格式，可选 'csv', 'parquet', 'hdf5', 'excel'
+        format: 导出格式，可选 'csv', 'parquet', 'hdf5', 'excel', 'json'
             (注意: 实际参数名为 output_format)
         time_format: 时间格式，'string' 或 'timedelta'
-        compression: 压缩方式，如 'gzip', 'snappy'（仅对 parquet 和 csv 有效）
+        compression: 压缩方式，如 'gzip', 'snappy'（json 仅支持 gzip）
 
     返回:
         实际保存的文件路径
@@ -76,8 +77,21 @@ def export_data(data: Dict[str, np.ndarray],
             raise ValueError(f"数据行数 {len(df)} 超过 Excel 限制 1,048,576 行")
         df.to_excel(file_path, index=False)
 
+    elif output_format == 'json':
+        file_path = f"{output_path}.json"
+        if compression and compression != 'gzip':
+            raise ValueError("JSON 导出仅支持 gzip 压缩，请选择“无”或 gzip")
+        json_text = df.to_json(orient='records', force_ascii=False, date_format='iso', lines=False)
+        if compression == 'gzip':
+            file_path = f"{file_path}.gz"
+            with gzip.open(file_path, 'wt', encoding='utf-8') as f:
+                f.write(json_text)
+        else:
+            with open(file_path, 'w', encoding='utf-8') as f:
+                f.write(json_text)
+
     else:
-        raise ValueError(f"不支持的导出格式: {output_format}。支持: csv, parquet, hdf5, excel")
+        raise ValueError(f"不支持的导出格式: {output_format}。支持: csv, parquet, hdf5, excel, json")
 
     logger.info("数据已导出到: %s", file_path)
     logger.info("  格式: %s", output_format.upper())

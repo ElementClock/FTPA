@@ -103,7 +103,7 @@ class PluginManager:
                 progress_callback(int((i / max(total, 1)) * 90), f"正在分析 {name}...")
 
             try:
-                result = plugin.analyze(df)
+                result = plugin.analyze(df, progress_callback=progress_callback)
                 results[name] = result
                 logger.debug("插件 %s 分析完成", name)
             except Exception as e:

@@ -93,6 +93,8 @@ class TrackPanel(QWidget):
         # 自动匹配可能的经纬度字段
         lat_candidates = [f for f in fields if "lat" in f.lower() or "纬度" in ctx.get_label(f)]
         lon_candidates = [f for f in fields if "lon" in f.lower() or "经度" in ctx.get_label(f)]
+        self.lat_combo.clear()
+        self.lon_combo.clear()
         self.lat_combo.addItems(lat_candidates or fields)
         self.lon_combo.addItems(lon_candidates or fields)
 
@@ -148,8 +150,8 @@ class TrackPanel(QWidget):
         t_start, t_end = self.track_time.get_time_range()
         try:
             R = compute_fitted_circle_radius(
-                self.ctx.query.get_time_vec(), t_start or "", t_end or "",
-                self.ctx.query.get_signal_data(lat_field), self.ctx.query.get_signal_data(lon_field)
+                self.ctx.query.get_time_vec(), t_start, t_end,
+                self.ctx.query.get_signal_data(lon_field), self.ctx.query.get_signal_data(lat_field)
             )
             if np.isnan(R):
                 self.result_text.setPlainText("拟合圆半径: 数据不足（需要至少3个点）")

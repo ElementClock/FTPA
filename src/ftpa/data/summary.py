@@ -30,9 +30,11 @@ def generate_data_summary(data: Dict[str, np.ndarray]) -> Dict:
     返回:
         统计摘要字典
     """
+    # 元数据键不计入通道数（TIME / filename / _name_mapping 等）
+    _meta_keys = {'TIME', 'filename', '_name_mapping'}
     summary = {
         'total_records': len(data.get('TIME', [])),
-        'total_channels': len(data) - 1,
+        'total_channels': sum(1 for k in data if k not in _meta_keys),
         'time_range': {},
         'channels': {}
     }

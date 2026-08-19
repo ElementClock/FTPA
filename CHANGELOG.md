@@ -5,6 +5,31 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 并遵循 [语义化版本](https://semver.org/lang/zh-CN/spec/v2.0.0.html)。
 
+## [Unreleased]
+
+### Fixed
+
+- **CSV 时间解析丢失时分秒**：`csv_loader._convert_flight_time()` 现在保留合并后的 `_datetime` 作为“飞行时间”列，`TIME` 不再因只保留日期列而全为 0；原始“日期”列和 UTC+8 偏移逻辑保留。
+- **小 CSV 文件加载崩溃**：`loader._trim_data()` 不再对 pandas 扩展数组调用无参构造，长度不足时返回同类型空切片，避免 `ArrowStringArray` 等类型抛 `TypeError`。
+- **圆拟合经纬度参数颠倒**：`DataContext.compute_fitted_circle()` 与 `panel_track._compute_circle()` 统一为先经度后纬度，避免半径计算偏差。
+- **全时段窗口失效**：`select_time_window()` 支持 `None` / 空字符串表示全时段；统计、穿越、起降、拟合等面板不再因默认全时段传入空字符串而只取最后一点。
+- **数据摘要通道数多算**：`generate_data_summary()` 不再把 `filename` 等元数据键计入 `total_channels`；批量处理中的通道数同步修正。
+- **导出面板摘要表格为空**：`panel_export._run_summary()` 按 `channels` 字典填充表格。
+- **统计结果表格无法分列**：`StatsTableWidget.populate()` 兼容 `statistics_params()` 现有字符串格式，正确拆分各统计列。
+- **路径常量层级错误**：`main_window.PROJECT_ROOT` 与 `DataContext.DATA_DIRS` 改为指向真实项目根目录。
+- **发动机列重复统计**：`EngineAnalysis._find_columns()` 结果去重，避免同一列被多个 pattern 重复加入。
+- **批量线程反模式**：`_BatchWorker` 改为普通 `QObject` + `moveToThread`，不再继承 `QThread` 后再次移动线程。
+
+### Added
+
+- **JSON 数据导出**：`export_data()` 支持 `output_format='json'`，并支持 `gzip` 压缩；导出面板在 JSON 格式下自动将 `snappy` 重置为“无”。
+- **插件进度回调透传**：`PluginManager.execute_analysis()` 将 `progress_callback` 传给各插件 `analyze()`。
+- **回归测试**：新增 `tests/test_review_fixes.py`，覆盖小 CSV 加载、全时段窗口、圆拟合参数顺序、摘要通道数、发动机列去重、插件进度回调透传。
+
+### Changed
+
+- **README 项目结构同步**：移除当前仓库不存在的 `references/`、`testdata/`、`logs/`、`examples/`、`docs/`、`CLAUDE.md` 等目录说明，补充 `AGENTS.md` 与实际测试文件。
+
 ## [1.0.1] - 2026-08-01
 
 本次发布为架构审计修复版本：归档遗留 CLI、将 GUI 确立为唯一入口，并将数据层重构为以 `DataContext` Facade 为核心、由可插拔子服务协作的结构。同时消除多处跨层 / 循环依赖，并修复若干安全与质量问题。

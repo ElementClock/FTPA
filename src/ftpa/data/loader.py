@@ -39,7 +39,14 @@ def _trim_data(arr, trim_head=None, trim_tail=None):
         return arr[trim_head:n_total - trim_tail]
 
     logger.warning("数据长度 (%d) 小于需截取的长度 (%d)，返回空数组。", n_total, n_drop)
-    return np.array([]) if isinstance(arr, np.ndarray) else type(arr)()
+    if isinstance(arr, np.ndarray):
+        return np.array([])
+    # pandas Series / 扩展数组等：返回同类型空切片，避免 type(arr)() 在
+    # ArrowStringArray 等无无参构造函数的类型上崩溃。
+    try:
+        return arr[:0]
+    except Exception:
+        return np.array([])
 
 
 def param_extract(filename: str) -> dict:

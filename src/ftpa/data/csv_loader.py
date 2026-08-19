@@ -205,20 +205,20 @@ def _convert_flight_time(
     # 转为北京时间 (UTC+8)
     df['_datetime'] = df['_datetime'] + timedelta(hours=8)
 
-    # 构建新的列顺序，避免 insert/drop 多次修改导致碎片化
+    # 构建新的列顺序，避免 insert/drop 多次修改导致碎片化。
+    # 保留原始“日期”列，同时将合并后的 _datetime 作为“飞行时间”列，
+    # 供 _dataframe_to_dict() 生成正确的相对 timedelta64 TIME。
     drop_cols = set()
     if flag_col in df.columns:
         drop_cols.add(flag_col)
     if time_col in df.columns:
         drop_cols.add(time_col)
-    if '_datetime' in df.columns:
-        drop_cols.add('_datetime')
 
-    remaining_cols = [c for c in df.columns if c not in drop_cols and c != date_col]
-    cols = [date_col] + remaining_cols
+    remaining_cols = [c for c in df.columns if c not in drop_cols]
+    cols = ['_datetime'] + [c for c in remaining_cols if c != '_datetime']
 
     df = df[cols].copy()
-    df.columns = ['飞行时间'] + [c for c in df.columns[1:]]
+    df = df.rename(columns={'_datetime': '飞行时间'})
 
     return df
 

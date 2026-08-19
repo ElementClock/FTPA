@@ -65,8 +65,9 @@ def select_time_window(time_vec, t_start, t_end):
 
     参数:
         time_vec: 时间向量（支持 timedelta64, 数值秒, TimedeltaIndex）
-        t_start: 起始时间（支持数值秒、字符串 'HH:MM:SS.mmm'、Timedelta）
-        t_end: 结束时间（同上）
+        t_start: 起始时间（支持数值秒、字符串 'HH:MM:SS.mmm'、Timedelta；
+                 None 或空字符串表示从最早时间开始）
+        t_end: 结束时间（同上；None 或空字符串表示到最晚时间结束）
 
     返回:
         (i_start, i_end, t_start_actual, t_end_actual):
@@ -77,8 +78,6 @@ def select_time_window(time_vec, t_start, t_end):
     """
     # 转换为数值秒
     time_sec = time_to_seconds_array(time_vec)
-    t_start_sec = parse_time_to_seconds(t_start)
-    t_end_sec = parse_time_to_seconds(t_end)
 
     n = len(time_sec)
 
@@ -86,26 +85,36 @@ def select_time_window(time_vec, t_start, t_end):
     if n == 0:
         return 0, 0, 0.0, 0.0
 
-    # O(log N) 查找：先用 searchsorted 定位插入点，再调整到最近点
-    i_start = int(np.searchsorted(time_sec, t_start_sec, side="left"))
-    if i_start >= n:
-        i_start = n - 1
-    elif i_start > 0 and (t_start_sec - time_sec[i_start - 1]) <= (time_sec[i_start] - t_start_sec):
-        i_start -= 1
+    # 开放边界：None / 空字符串表示“全时段”
+    if t_start is None or t_start == "":
+        i_start = 0
+        t_start_actual = float(time_sec[0])
+    else:
+        t_start_sec = parse_time_to_seconds(t_start)
+        # O(log N) 查找：先用 searchsorted 定位插入点，再调整到最近点
+        i_start = int(np.searchsorted(time_sec, t_start_sec, side="left"))
+        if i_start >= n:
+            i_start = n - 1
+        elif i_start > 0 and (t_start_sec - time_sec[i_start - 1]) <= (time_sec[i_start] - t_start_sec):
+            i_start -= 1
+        t_start_actual = float(time_sec[i_start])
 
-    i_end = int(np.searchsorted(time_sec, t_end_sec, side="left"))
-    if i_end >= n:
+    if t_end is None or t_end == "":
         i_end = n - 1
-    elif i_end > 0 and (t_end_sec - time_sec[i_end - 1]) <= (time_sec[i_end] - t_end_sec):
-        i_end -= 1
+        t_end_actual = float(time_sec[-1])
+    else:
+        t_end_sec = parse_time_to_seconds(t_end)
+        i_end = int(np.searchsorted(time_sec, t_end_sec, side="left"))
+        if i_end >= n:
+            i_end = n - 1
+        elif i_end > 0 and (t_end_sec - time_sec[i_end - 1]) <= (time_sec[i_end] - t_end_sec):
+            i_end -= 1
+        t_end_actual = float(time_sec[i_end])
 
     # 保证起始索引小于等于结束索引
     if i_start > i_end:
         i_start, i_end = i_end, i_start
-
-    # 返回实际起止时间（数值秒）
-    t_start_actual = float(time_sec[i_start])
-    t_end_actual = float(time_sec[i_end])
+        t_start_actual, t_end_actual = t_end_actual, t_start_actual
 
     return i_start, i_end, t_start_actual, t_end_actual
 

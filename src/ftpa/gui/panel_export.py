@@ -48,6 +48,7 @@ class ExportPanel(QWidget):
         self.export_compression = QComboBox()
         self.export_compression.addItems(["无", "gzip", "snappy"])
         fl1.addRow("压缩:", self.export_compression)
+        self.export_fmt.currentTextChanged.connect(self._on_export_fmt_changed)
         row = QHBoxLayout()
         self.export_path = QLineEdit()
         self.export_path.setPlaceholderText("输出文件路径 (默认: export.<fmt>)")
@@ -126,6 +127,11 @@ class ExportPanel(QWidget):
         except Exception as e:
             self.export_path.setText(f"错误: {e}")
 
+    def _on_export_fmt_changed(self, fmt: str):
+        """JSON 导出仅支持无压缩或 gzip，切换格式时把 snappy 重置为无。"""
+        if fmt == "json" and self.export_compression.currentText() == "snappy":
+            self.export_compression.setCurrentText("无")
+
     def _run_stat_export(self):
         """执行统计结果导出。"""
         if self.ctx is None:
@@ -137,7 +143,7 @@ class ExportPanel(QWidget):
         try:
             # 通过 DataContext 计算并导出统计
             signals = self.ctx.get_field_names()[:20]
-            stats = self.ctx.compute_parameter_stats("", "", signals)
+            stats = self.ctx.compute_parameter_stats(None, None, signals)
             result = export_statistics(stats, path, fmt)
             self.stat_path.setText(result)
         except Exception as e:
@@ -150,7 +156,17 @@ class ExportPanel(QWidget):
         try:
             summary = self.ctx.generate_summary()
             channels = summary.get("channels", summary.get("data", {}))
-            if isinstance(channels, list):
+            if isinstance(channels, dict):
+                items = sorted(channels.items())
+                self.summary_table.setRowCount(len(items))
+                for row, (name, ch) in enumerate(items):
+                    self.summary_table.setItem(row, 0, QTableWidgetItem(name))
+                    self.summary_table.setItem(row, 1, QTableWidgetItem(str(ch.get("min", ""))))
+                    self.summary_table.setItem(row, 2, QTableWidgetItem(str(ch.get("max", ""))))
+                    self.summary_table.setItem(row, 3, QTableWidgetItem(str(ch.get("mean", ""))))
+                    self.summary_table.setItem(row, 4, QTableWidgetItem(str(ch.get("valid_count", ""))))
+                    self.summary_table.setItem(row, 5, QTableWidgetItem(str(ch.get("invalid_count", ""))))
+            elif isinstance(channels, list):
                 self.summary_table.setRowCount(len(channels))
                 for row, ch in enumerate(channels):
                     self.summary_table.setItem(row, 0, QTableWidgetItem(ch.get("name", "")))
@@ -159,6 +175,8 @@ class ExportPanel(QWidget):
                     self.summary_table.setItem(row, 3, QTableWidgetItem(str(ch.get("mean", ""))))
                     self.summary_table.setItem(row, 4, QTableWidgetItem(str(ch.get("valid_count", ""))))
                     self.summary_table.setItem(row, 5, QTableWidgetItem(str(ch.get("invalid_count", ""))))
+            else:
+                self.summary_table.setRowCount(0)
         except Exception as e:
             self.summary_table.setRowCount(1)
             self.summary_table.setItem(0, 0, QTableWidgetItem(f"错误: {e}"))

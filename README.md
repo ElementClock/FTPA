@@ -2,7 +2,7 @@
 
 FTPA (Flight Test Performance Analysis) 是一个用于分析飞机性能操稳试飞数据的 Python 工具包，支持 TXT（Tab 分隔）和 CSV 两种飞参数据格式，提供 PySide6 GUI 交互界面（外加 `--dry-run` 无界面验证入口）。
 
-> CLI 分析模式（verify/chunked/analysis/stats/interactive）已归档到 `references/cli/`，不再由 `src/ftpa/main.py` 提供。
+> CLI 分析模式（verify/chunked/analysis/stats/interactive）已归档（当前仓库未保留归档目录），不再由 `src/ftpa/main.py` 提供。
 
 ---
 
@@ -64,7 +64,7 @@ python -m ftpa.main --dry-run
 |------|------|--------|------|
 | `--dry-run` | 无 | `False` | 无界面模式，仅校验入口可正常加载（不创建窗口） |
 
-> 旧版 `--mode` / `--gui` / `--nrows` / `--chunksize` 等 CLI 参数已随 CLI 模块归档到 `references/cli/`，主入口不再支持。
+> 旧版 `--mode` / `--gui` / `--nrows` / `--chunksize` 等 CLI 参数已随 CLI 模块归档（当前仓库未保留归档目录），主入口不再支持。
 
 ---
 
@@ -184,37 +184,22 @@ FTPA/
 │   ├── test_config.py            # 配置测试
 │   ├── test_cache.py             # 缓存测试
 │   ├── test_csv_loader.py        # CSV 加载测试
+│   ├── test_csv_loader_filter.py # CSV 时间列过滤测试
 │   ├── test_plot_renderer.py     # 渲染器测试
 │   ├── test_region_ctrl.py       # 区域控制器测试
 │   ├── test_event_detection.py   # 事件检测测试
+│   ├── test_review_fixes.py      # 代码审阅修复回归测试
 │   ├── bench_load.py             # 加载性能基准
 │   ├── bench_real.py             # 真实数据基准
 │   └── bench_scroll_zoom.py      # 滚动缩放基准
 │
-├── references/                   # 参考代码
-│   ├── cli/                      #   归档的 CLI 模块（pipeline / plotting / batch_processor / 旧 main）
-│   ├── matlab/                   #   MATLAB 原始实现
-│   │   ├── Param/                #     参数提取（5个文件）
-│   │   ├── PrivateComputing/     #     计算函数（2个文件）
-│   │   ├── PrivateStatistics/    #     统计函数（6个文件）
-│   │   └── PlotFigure/           #     绘图函数（9个文件）
-│   └── flight_parameter/         #   参考项目（CSV 加载 + 分析框架）
-│
-├── testdata/                     # 测试数据文件（git 管理）
-├── data/                         # 数据文件目录
-│   ├── raw/                      # 原始数据
-│   ├── processed/                # 处理后的数据
-│   └── results/                  # 分析结果
-│
-├── logs/                         # 日志文件目录
-├── examples/                     # 示例代码目录
-├── docs/                         # 文档目录
+├── data/                         # 数据文件目录（当前含参数名.xlsx 与示例 TXT）
 │
 ├── pyproject.toml                # Python 项目配置
 ├── requirements.txt              # 依赖清单（带兼容性上限）
 ├── ftpa_config.toml              # 项目级 TOML 配置（可选）
 ├── README.md                     # 项目说明（本文件）
-├── CLAUDE.md                     # AI 辅助开发指南
+├── AGENTS.md                     # AI 辅助开发指南
 ├── CHANGELOG.md                  # 变更日志
 └── .gitignore                    # Git 忽略规则
 ```
@@ -260,7 +245,7 @@ gui/ (PySide6 交互界面 + matplotlib 渲染)
 - `batch.py` — `batch_process_files()` / `batch_analyze_statistics()` / `batch_export_summaries()`: 批量处理（从 `batch_processor.py` 迁入）
 - `summary.py` — `generate_data_summary()` / `print_data_summary()`: 数据摘要（从 `statistics/multi.py` 迁入，消除循环依赖）
 - `enrichment.py` — `add_weight_cg_to_data()`: 数据富化（从 `computing/weight_cg.py` 迁入，修复跨层依赖）
-- `exporter.py` — `export_data()` / `export_statistics()`: 数据导出
+- `exporter.py` — `export_data()` / `export_statistics()`: 数据导出（支持 CSV / Parquet / HDF5 / Excel / JSON，JSON 可选 gzip 压缩）
 - `column_config.py` — `get_replacement_rules()` / `apply_replacement_rules()`: CSV 列配置
 
 ### 2. 计算层 (computing/)
@@ -528,4 +513,4 @@ git checkout v1.0.0
 ---
 
 *此文件为项目主文档。*
-*最后更新：2026-08-01 | 版本：1.0.1*
+*最后更新：2026-08-10 | 版本：1.0.1（下一版本变更见 CHANGELOG）*
