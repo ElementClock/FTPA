@@ -30,3 +30,8 @@ class TestReplacementRules:
         custom = {"OLD": "NEW"}
         result = apply_replacement_rules("OLD_COLUMN", rules=custom)
         assert result == "NEW_COLUMN"
+
+    def test_apply_excel_exact_name_first(self):
+        """Excel 静态映射的精确原始名优先于 ATA 子串规则。"""
+        result = apply_replacement_rules("GNSU1001_L_076")
+        assert result == "高度_G1"

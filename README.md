@@ -147,7 +147,8 @@ FTPA/
 │       │   ├── io.py             #   通用文件读取（含 ZIP Slip 防护）
 │       │   ├── cache.py          #   文件缓存（LRU + mtime 失效）
 │       │   ├── batch.py          #   批处理（batch_process_files 等3个函数）
-│       │   ├── label_map.py      #   标签映射（LabelMap）
+│       │   ├── label_map.py      #   标签映射（LabelMap，支持静态映射 + Excel 覆盖）
+│       │   ├── parameter_map.py  #   由 data/参数名.xlsx 生成的静态参数映射
 │       │   ├── exporter.py       #   数据导出
 │       │   ├── column_config.py  #   列配置（CSV 列定义）
 │       │   ├── summary.py        #   数据摘要（generate/print_data_summary）
@@ -201,6 +202,9 @@ FTPA/
 │
 ├── data/                         # 数据文件目录（当前含参数名.xlsx 与示例 TXT）
 │
+├── scripts/                      # 辅助脚本
+│   └── generate_parameter_map.py # 根据 data/参数名.xlsx 生成静态参数映射
+│
 ├── FTPA_GUI.bat                  # Windows 桌面双击启动脚本（直接运行 GUI）
 ├── pyproject.toml                # Python 项目配置
 ├── requirements.txt              # 依赖清单（带兼容性上限）
@@ -247,7 +251,7 @@ gui/ (PySide6 交互界面 + matplotlib 渲染)
 - `csv_loader.py` — `csv_param_extract()`: CSV 格式数据加载，自动编码检测（chardet），列配置驱动处理
 - `io.py` — `read_data_file()`: 通用文件读取（支持 dtype 预声明跳过类型推断）；`resolve_zip_file()`: ZIP 自动解压（含 Zip Slip 路径遍历校验）
 - `cache.py` — `FileCache`: OrderedDict LRU 缓存 + mtime 失效策略
-- `label_map.py` — `LabelMap`: 参数名称↔中文标签双向映射（从 Excel 加载，仅 TXT 需要）
+- `label_map.py` — `LabelMap`: 参数名称↔中文标签双向映射（静态映射 `parameter_map.py` 为默认，Excel 存在时覆盖/补充；含单位与重复标签对照）
   - `get_label()` / `get_var_name()` / `add()`: 标签查询与动态扩展
 - `batch.py` — `batch_process_files()` / `batch_analyze_statistics()` / `batch_export_summaries()`: 批量处理（从 `batch_processor.py` 迁入）
 - `summary.py` — `generate_data_summary()` / `print_data_summary()`: 数据摘要（从 `statistics/multi.py` 迁入，消除循环依赖）

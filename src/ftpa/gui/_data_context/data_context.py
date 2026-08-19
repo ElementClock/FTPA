@@ -307,6 +307,10 @@ class DataContext:
     def get_field_labels(self) -> dict[str, str]:
         return self._query_svc.get_field_labels()
 
+    def get_field_labels_with_units(self) -> dict[str, str]:
+        """字段名 -> 带单位的中文标签（用于 GUI 参数树显示）。"""
+        return self._field_resolver.get_field_labels_with_units()
+
     def get_label(self, field_name: str) -> str:
         return self._query_svc.get_label(field_name)
 

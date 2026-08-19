@@ -26,10 +26,15 @@
 - **插件进度回调透传**：`PluginManager.execute_analysis()` 将 `progress_callback` 传给各插件 `analyze()`。
 - **回归测试**：新增 `tests/test_review_fixes.py`，覆盖小 CSV 加载、全时段窗口、圆拟合参数顺序、摘要通道数、发动机列去重、插件进度回调透传。
 - **桌面启动脚本**：新增 `FTPA_GUI.bat`，Windows 下双击即可直接启动 GUI，自动使用项目虚拟环境 Python 并设置 `PYTHONPATH`。
+- **静态参数映射**：新增 `src/ftpa/data/parameter_map.py` 与 `scripts/generate_parameter_map.py`，由 `data/参数名.xlsx` 生成字段名→中文名、单位、重复标签对照表。
+- **单位支持**：`LabelMap` 新增 `get_unit()` / `list_all_with_units()`；GUI 参数树显示“中文标签 (单位)”。
+- **重复标签对照**：新增 `get_var_names()` / `get_duplicate_labels()`，重复中文标签自动加编号后缀并保留原始标签对照表。
 
 ### Changed
 
 - **README 项目结构同步**：移除当前仓库不存在的 `references/`、`testdata/`、`logs/`、`examples/`、`docs/`、`CLAUDE.md` 等目录说明，补充 `AGENTS.md` 与实际测试文件。
+- **`LabelMap` 数据源**：改为“静态映射 + Excel 可选覆盖”，Excel 缺失时自动回退到静态映射；重复标签发出警告并沿用原行为。
+- **`column_config.py`**：`apply_replacement_rules()` 优先使用 Excel 静态映射的精确原始名匹配，再回退到 ATA 子串替换。
 
 ## [1.0.1] - 2026-08-01
 

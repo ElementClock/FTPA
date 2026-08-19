@@ -67,6 +67,17 @@ class FieldResolver:
         """获取单个字段的中文标签。"""
         return self.get_field_labels().get(field_name, field_name)
 
+    def get_field_labels_with_units(self) -> dict[str, str]:
+        """字段名 -> 带单位的中文标签（用于 GUI 参数树显示）。
+
+        例如：``高度_G1 (m)``；无单位时只返回中文标签。
+        """
+        result: dict[str, str] = {}
+        for field, label in self.get_field_labels().items():
+            unit = self._lm.get_unit(field) if self._lm is not None else None
+            result[field] = f"{label} ({unit})" if unit else label
+        return result
+
     def resolve_field(self, signal_id: str) -> str | None:
         """将中文标签或字段名解析为 data 中的字段名。"""
         if signal_id in self._data:

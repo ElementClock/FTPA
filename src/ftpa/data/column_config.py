@@ -10,6 +10,8 @@ from __future__ import annotations
 
 from typing import Dict
 
+from .parameter_map import PARAMETER_LABELS
+
 
 def get_replacement_rules() -> Dict[str, str]:
     """获取列名替换规则字典。
@@ -97,6 +99,10 @@ def apply_replacement_rules(column_name: str, rules: Dict[str, str] | None = Non
     Returns:
         替换后的列名。
     """
+    # Excel/静态映射的精确原始名优先于 ATA 子串替换
+    if column_name in PARAMETER_LABELS:
+        return PARAMETER_LABELS[column_name]
+
     if rules is None:
         rules = get_replacement_rules()
     for pattern, replacement in rules.items():
