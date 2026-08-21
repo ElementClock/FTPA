@@ -108,3 +108,20 @@ class TestFieldResolverUnits:
         # TIME 不在字段列表中（FieldResolver 会排除元数据键），因此这里验证未知字段回退
         fr2 = FieldResolver({"UNKNOWN": np.array([1.0])}, lm)
         assert fr2.get_field_labels_with_units()["UNKNOWN"] == "UNKNOWN"
+
+    def test_get_all_field_labels_with_units(self):
+        lm = LabelMap()
+        fr = FieldResolver(
+            {"GNSU1001_L_076": np.array([1.0]), "EXTRA": np.array([1.0])},
+            lm,
+        )
+        all_labels, available = fr.get_all_field_labels_with_units()
+
+        # 当前数据字段
+        assert all_labels["GNSU1001_L_076"] == "高度_G1 (m)"
+        assert all_labels["EXTRA"] == "EXTRA"
+        # 静态库中存在但当前数据中没有的字段也会出现
+        assert "RDC5001_L_323" in all_labels
+        assert all_labels["RDC5001_L_323"] == "3发油门_1 (°)"
+        # 可用字段只包含当前数据字段
+        assert available == {"GNSU1001_L_076", "EXTRA"}

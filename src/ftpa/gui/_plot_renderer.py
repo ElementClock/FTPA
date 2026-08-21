@@ -28,6 +28,7 @@ from PySide6.QtWidgets import QMenu, QMessageBox
 from ..utils.time_utils import format_time_seconds
 from ._layout_ctrl import LayoutController
 from ._downsampler import min_max_downsample
+from .parameter_picker import ParameterPickerDialog
 from ..config import CONFIG
 
 if TYPE_CHECKING:
@@ -472,8 +473,22 @@ class PlotRenderer:
             act_clear.triggered.connect(lambda: self._clear_subplot(idx))
             menu.addAction(act_clear)
 
+            act_add = QAction("添加参数...", w)
+            act_add.triggered.connect(lambda: self._open_parameter_picker(idx))
+            menu.addAction(act_add)
+
         widget_pos = w.canvas.mapFromGlobal(w.cursor().pos())
         menu.exec(w.canvas.mapToGlobal(widget_pos))
+
+    def _open_parameter_picker(self, idx: int) -> None:
+        """右键“添加参数...”：打开搜索式参数选择对话框。"""
+        w = self._widget
+        if w.ctx is None:
+            return
+        field_labels, available_fields = w.ctx.get_all_field_labels_with_units()
+        dialog = ParameterPickerDialog(w, field_labels, available_fields)
+        if dialog.exec() and dialog.selected_field():
+            self._add_to_subplot(idx, dialog.selected_field())
 
     def _switch_layout_from_menu(self, mode: str) -> None:
         """右键菜单：切换布局模式。"""

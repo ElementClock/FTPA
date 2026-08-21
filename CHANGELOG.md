@@ -29,12 +29,15 @@
 - **静态参数映射**：新增 `src/ftpa/data/parameter_map.py` 与 `scripts/generate_parameter_map.py`，由 `data/参数名.xlsx` 生成字段名→中文名、单位、重复标签对照表。
 - **单位支持**：`LabelMap` 新增 `get_unit()` / `list_all_with_units()`；GUI 参数树显示“中文标签 (单位)”。
 - **重复标签对照**：新增 `get_var_names()` / `get_duplicate_labels()`，重复中文标签自动加编号后缀并保留原始标签对照表。
+- **完整参数库展示**：右侧参数树显示静态参数库（538 项）+ 当前数据额外字段；当前数据中不存在的参数置灰不可选/拖拽。
+- **搜索式参数选择对话框**：右键“添加参数...”打开 `ParameterPickerDialog`，支持搜索、单位显示、不可用参数置灰，避免参数过多导致菜单占满屏幕。
 
 ### Changed
 
 - **README 项目结构同步**：移除当前仓库不存在的 `references/`、`testdata/`、`logs/`、`examples/`、`docs/`、`CLAUDE.md` 等目录说明，补充 `AGENTS.md` 与实际测试文件。
 - **`LabelMap` 数据源**：改为“静态映射 + Excel 可选覆盖”，Excel 缺失时自动回退到静态映射；重复标签发出警告并沿用原行为。
 - **`column_config.py`**：`apply_replacement_rules()` 优先使用 Excel 静态映射的精确原始名匹配，再回退到 ATA 子串替换。
+- **参数树/参数选择**：`FieldResolver` / `DataContext` 新增完整参数库查询；`ParameterTreeWidget` 支持不可用参数置灰；`PlotRenderer` 右键菜单改为搜索式对话框添加参数。
 
 ## [1.0.1] - 2026-08-01
 

@@ -529,9 +529,9 @@ class MainWindow(QMainWindow):
         # 重置子图（不自动填充默认信号）
         self.plot_widget.subplot_fields = {i: [] for i in range(len(self.plot_widget.axes))}
 
-        # 填充参数树（含单位，便于后续数据分析扩展）
-        field_labels = ctx.get_field_labels_with_units()
-        self.param_tree.set_params(field_labels)
+        # 填充参数树（完整参数库 + 当前数据可用标记）
+        field_labels, available_fields = ctx.get_all_field_labels_with_units()
+        self.param_tree.set_params(field_labels, available_fields=available_fields)
         self.param_tree.update_indicators(self.plot_widget.subplot_fields)
 
         # 填充绘图区

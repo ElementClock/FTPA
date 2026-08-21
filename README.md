@@ -139,6 +139,7 @@ FTPA/
 │       │   ├── _downsampler.py   #   向量化 min-max 降采样
 │       │   ├── _font_config.py   #   Matplotlib CJK 字体配置
 │       │   ├── widgets.py        #   自定义控件（参数树、穿越控制）
+│       │   ├── parameter_picker.py # 搜索式参数选择对话框（右键添加参数）
 │       │   ├── worker.py         #   后台线程（DataLoaderWorker + AnalysisWorker）
 │       │   └── log_handler.py    #   logging → GUI 日志桥接
 │       ├── data/                 # 数据加载子包
@@ -315,7 +316,8 @@ gui/ (PySide6 交互界面 + matplotlib 渲染)
 - `_drop_ctrl.py` — `TreeDragHelper` + `CanvasDropFilter`: 参数树拖拽到子图的拖放控制器
 - `_downsampler.py` — `min_max_downsample()`: 向量化 min-max 降采样（np.reshape + nanmin/nanmax，500K 点 <1ms）
 - `_font_config.py` — `configure_display_font()`: Matplotlib CJK 字体配置（线程安全，从 `plotting.py` 提取）
-- `widgets.py` — `ParameterTreeWidget`: 参数树面板；`CrossingCtrl`: 穿越控制组件
+- `widgets.py` — `ParameterTreeWidget`: 参数树面板（完整参数库 + 不可用参数置灰）；`CrossingCtrl`: 穿越控制组件
+- `parameter_picker.py` — `ParameterPickerDialog`: 搜索式参数选择对话框（右键“添加参数...”使用，避免大菜单占屏）
 - `worker.py` — 后台线程：
   - `DataLoaderWorker`: 数据加载 QThread
   - `AnalysisWorker`: 系统分析后台线程（执行 `SystemAnalyzer.analyze()` + `generate_reports()`，防 GUI 冻结）

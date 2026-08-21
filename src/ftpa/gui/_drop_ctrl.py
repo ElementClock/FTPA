@@ -59,7 +59,11 @@ class TreeDragHelper(QObject):
             if event.button() == Qt.MouseButton.LeftButton:
                 # 记录按下位置和当前 item
                 item = self._param_tree.tree.itemAt(event.position().toPoint())
-                if item is not None and item.data(0, Qt.ItemDataRole.UserRole) is not None:
+                if (
+                    item is not None
+                    and item.data(0, Qt.ItemDataRole.UserRole) is not None
+                    and (item.flags() & Qt.ItemIsEnabled)
+                ):
                     self._press_pos = event.position().toPoint()
                     self._press_item = item
                 else:

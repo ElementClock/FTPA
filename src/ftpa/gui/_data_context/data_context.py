@@ -311,6 +311,10 @@ class DataContext:
         """字段名 -> 带单位的中文标签（用于 GUI 参数树显示）。"""
         return self._field_resolver.get_field_labels_with_units()
 
+    def get_all_field_labels_with_units(self) -> tuple[dict[str, str], set[str]]:
+        """返回完整参数库标签与当前数据可用字段集合。"""
+        return self._field_resolver.get_all_field_labels_with_units()
+
     def get_label(self, field_name: str) -> str:
         return self._query_svc.get_label(field_name)
 
