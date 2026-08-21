@@ -57,6 +57,11 @@ class TestPreviewPanel:
         panel.set_data_context(_FakeCtx())
         panel.preview_field("sig")
         assert len(panel.figure.axes) == 1
+        ax = panel.figure.axes[0]
+        # 预览区不显示参数名/时间/刻度，最大化曲线区域
+        assert ax.get_title() == ""
+        assert ax.get_xlabel() == ""
+        assert ax.get_ylabel() == ""
 
     def test_preview_missing_field_shows_placeholder(self):
         panel = PreviewPanel()

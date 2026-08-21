@@ -63,18 +63,17 @@ class PreviewPanel(QWidget):
             self.show_placeholder(f"非数值参数: {field_name}")
             return
 
-        label = self._ctx.get_label(field_name)
-        unit = self._ctx.query.get_label_map().get_unit(field_name) if self._ctx.query.get_label_map() else None
-        ylabel = f"{label} ({unit})" if unit else label
-
         self.figure.clear()
         ax = self.figure.add_subplot(111)
         ax.plot(time_sec, values, linewidth=0.8, color="#1976D2")
-        ax.set_xlabel("时间 (s)")
-        ax.set_ylabel(ylabel)
-        ax.set_title(label, fontsize=9)
-        ax.grid(True, alpha=0.3)
-        self.figure.tight_layout()
+        # 预览区只展示曲线本身，隐藏参数名/时间/刻度等已知信息以最大化曲线区域
+        ax.set_xticks([])
+        ax.set_yticks([])
+        ax.set_xlabel("")
+        ax.set_ylabel("")
+        ax.set_title("")
+        ax.grid(False)
+        self.figure.subplots_adjust(left=0.01, right=0.99, top=0.99, bottom=0.01)
         self.canvas.draw_idle()
 
     def clear_preview(self) -> None:

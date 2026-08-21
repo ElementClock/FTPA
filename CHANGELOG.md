@@ -41,6 +41,7 @@
 - **`column_config.py`**：`apply_replacement_rules()` 优先使用 Excel 静态映射的精确原始名匹配，再回退到 ATA 子串替换。
 - **参数树/参数选择**：`FieldResolver` / `DataContext` 新增完整参数库查询；`ParameterTreeWidget` 支持不可用参数置灰；`PlotRenderer` 右键菜单改为搜索式对话框添加参数。
 - **右侧布局**：参数树下方新增曲线预览区，右侧改为垂直分割布局，点选参数即时预览。
+- **预览区精简**：预览曲线不再显示参数名、时间、刻度等已知信息，最大化曲线显示区域。
 
 ## [1.0.1] - 2026-08-01
 
