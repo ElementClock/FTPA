@@ -40,10 +40,12 @@ from PySide6.QtWidgets import (
     QPushButton,
     QSplitter,
     QStatusBar,
+    QVBoxLayout,
     QWidget,
 )
 
 from .panel_plot import PlotCanvasWidget
+from .panel_preview import PreviewPanel
 from .services import DataContext
 from .widgets import ParameterTreeWidget
 from .. import __version__
@@ -90,14 +92,32 @@ class MainWindow(QMainWindow):
         self.plot_widget.subplot_fields_changed.connect(self._on_subplot_fields_changed)
 
         self.param_tree = ParameterTreeWidget()
+        self.preview_panel = PreviewPanel()
+        self.param_tree.param_selected.connect(self._on_param_selected_for_preview)
+
+        # 右侧容器：参数树 + 曲线预览区（右下角）
+        self._right_panel = QWidget()
+        self._right_layout = QVBoxLayout(self._right_panel)
+        self._right_layout.setContentsMargins(0, 0, 0, 0)
+        self._right_layout.setSpacing(0)
+
+        self._right_splitter = QSplitter(Qt.Vertical)
+        self._right_splitter.addWidget(self.param_tree)
+        self._right_splitter.addWidget(self.preview_panel)
+        self._right_splitter.setStretchFactor(0, 3)
+        self._right_splitter.setStretchFactor(1, 2)
+        self._right_splitter.setCollapsible(0, False)
+        self._right_splitter.setCollapsible(1, True)
+        self._right_splitter.setSizes([400, 180])
+        self._right_layout.addWidget(self._right_splitter)
 
         self._splitter = QSplitter(Qt.Horizontal)
         self._splitter.addWidget(self.plot_widget)
-        self._splitter.addWidget(self.param_tree)
+        self._splitter.addWidget(self._right_panel)
         self._splitter.setStretchFactor(0, 5)
         self._splitter.setStretchFactor(1, 1)
         self._splitter.setCollapsible(0, False)   # 绘图区不可折叠
-        self._splitter.setCollapsible(1, True)    # 参数面板可折叠
+        self._splitter.setCollapsible(1, True)    # 右侧面板可折叠
 
         # 参数面板最小宽度：控制面板在小于此宽度时自动隐藏
         # 默认阈值 50px（约为 QSplitter 默认折叠阈值 ~150px 的 1/3）
@@ -279,22 +299,22 @@ class MainWindow(QMainWindow):
         if len(sizes) < 2:
             return
         panel_width = sizes[1]
-        if panel_width < self._PANEL_COLLAPSE_THRESHOLD and self.param_tree.isVisible():
-            self.param_tree.hide()
+        if panel_width < self._PANEL_COLLAPSE_THRESHOLD and self._right_panel.isVisible():
+            self._right_panel.hide()
             self.status_bar.showMessage("参数面板已隐藏，点击菜单「视图 → 参数面板」恢复", 3000)
-        elif panel_width >= self._PANEL_COLLAPSE_THRESHOLD and not self.param_tree.isVisible():
-            self.param_tree.show()
+        elif panel_width >= self._PANEL_COLLAPSE_THRESHOLD and not self._right_panel.isVisible():
+            self._right_panel.show()
 
     def _toggle_param_panel(self, visible: bool):
         """切换参数面板的显示/隐藏。"""
-        if visible and not self.param_tree.isVisible():
-            self.param_tree.show()
+        if visible and not self._right_panel.isVisible():
+            self._right_panel.show()
             # 恢复到合理宽度
             sizes = self._splitter.sizes()
             total = sum(sizes) if sizes else 1120
             self._splitter.setSizes([int(total * 0.85), int(total * 0.15)])
-        elif not visible and self.param_tree.isVisible():
-            self.param_tree.hide()
+        elif not visible and self._right_panel.isVisible():
+            self._right_panel.hide()
 
     # ── 子图选择 ──
 
@@ -303,6 +323,13 @@ class MainWindow(QMainWindow):
         self.param_tree.set_selected_subplot(idx)
         if idx is not None:
             self.status_bar.showMessage(f"已选中子图 {idx + 1}")
+
+    def _on_param_selected_for_preview(self, field_name: str):
+        """点选右侧参数时，在右下角预览区刷新曲线。"""
+        if self.data_context is not None and self.data_context.is_loaded:
+            self.preview_panel.preview_field(field_name)
+        else:
+            self.preview_panel.clear_preview()
 
     # ── 参数树操作 ──
 
@@ -487,6 +514,7 @@ class MainWindow(QMainWindow):
         self.data_context = None
         self.plot_widget.clear_data_context()
         self.param_tree.clear_params()
+        self.preview_panel.clear_preview()
         self.apply_btn.setEnabled(False)
         self.reset_btn.setEnabled(False)
         self.copy_btn.setEnabled(False)
@@ -537,6 +565,9 @@ class MainWindow(QMainWindow):
         # 填充绘图区
         self.plot_widget.set_data_context(ctx)
 
+        # 绑定预览区并清空初始状态
+        self.preview_panel.set_data_context(ctx)
+
         # 启用控件
         self.apply_btn.setEnabled(True)
         self.reset_btn.setEnabled(True)
@@ -581,6 +612,9 @@ class MainWindow(QMainWindow):
 
         # 清空参数树
         self.param_tree.clear_params()
+
+        # 清空预览区
+        self.preview_panel.clear_preview()
 
         # 禁用控件
         self.apply_btn.setEnabled(False)
@@ -719,6 +753,9 @@ class MainWindow(QMainWindow):
             self.plot_widget.clear_data_context()
             if hasattr(self.plot_widget, 'canvas'):
                 self.plot_widget.canvas.close()
+            self.preview_panel.clear_preview()
+            if hasattr(self.preview_panel, 'canvas'):
+                self.preview_panel.canvas.close()
         except Exception:
             logger.warning("Canvas 清理失败", exc_info=True)
 
