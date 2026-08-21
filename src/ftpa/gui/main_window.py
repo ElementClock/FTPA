@@ -411,7 +411,15 @@ class MainWindow(QMainWindow):
         return None
 
     def _on_run_interval_analysis(self) -> None:
-        """执行区间分析并将结果追加到信息框。"""
+        """执行区间分析并将结果追加到信息框（统一异常兜底）。"""
+        try:
+            self._do_interval_analysis()
+        except Exception as e:
+            self._append_log(f"[区间分析] 执行失败: {e}")
+            logger.exception("区间分析执行失败")
+
+    def _do_interval_analysis(self) -> None:
+        """区间分析内部实现。"""
         if self.data_context is None or not self.data_context.is_loaded:
             return
 
@@ -441,15 +449,11 @@ class MainWindow(QMainWindow):
             return
 
         operation = self.analysis_op_combo.currentText()
-        try:
-            result = run_interval_analysis(
-                time_sec[i_start:i_end],
-                values[i_start:i_end],
-                operation,
-            )
-        except Exception as e:
-            self._append_log(f"[区间分析] 执行失败: {e}")
-            return
+        result = run_interval_analysis(
+            time_sec[i_start:i_end],
+            values[i_start:i_end],
+            operation,
+        )
 
         self.analysis_interval_label.setText(
             f"区间: {format_time_seconds(t_start)} - {format_time_seconds(t_end)}"
