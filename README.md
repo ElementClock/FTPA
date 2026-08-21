@@ -169,6 +169,7 @@ FTPA/
 │       │   ├── interface.py      #   分析接口定义
 │       │   ├── plugin_manager.py #   插件管理器
 │       │   ├── utils.py          #   分析工具函数
+│       │   ├── interval_analysis.py # 区间分析操作注册表（积分/极值/平均值等）
 │       │   ├── engines/          #   发动机分析子系统（*_analysis.py + *_report_generator.py）
 │       │   ├── fuel/             #   燃油分析子系统
 │       │   ├── power/            #   动力分析子系统
@@ -296,7 +297,7 @@ gui/ (PySide6 交互界面 + matplotlib 渲染)
 **职责**: PySide6 交互式图形界面
 
 - `app.py` — GUI 应用入口（`main(dry_run=False)`，安装 GUI 日志桥接）
-- `main_window.py` — 主窗口：菜单栏、穿越控制面板（阈值/模式/应用/重置）、信息显示
+- `main_window.py` — 主窗口：菜单栏、穿越控制面板（阈值/模式/应用/重置）、区间分析模块、信息显示
 - `services.py` — 32 行纯重导出文件，仅保留 `from ._data_context import DataContext, ...`，确保外部 `from .services import DataContext` 仍可用
 - `_data_context/` — **DataContext Facade 子包**（原 582 行 God Object 已拆分）：
   - `data_context.py` — 240 行 Facade 协调者，持有数据与子服务，仅负责生命周期管理与请求分发

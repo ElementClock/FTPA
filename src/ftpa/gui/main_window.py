@@ -32,6 +32,8 @@ from PySide6.QtWidgets import (
     QComboBox,
     QFileDialog,
     QGridLayout,
+    QGroupBox,
+    QHBoxLayout,
     QLabel,
     QLineEdit,
     QMainWindow,
@@ -49,7 +51,11 @@ from .panel_preview import PreviewPanel
 from .services import DataContext
 from .widgets import ParameterTreeWidget
 from .. import __version__
+from ..analysis.interval_analysis import INTERVAL_OPERATIONS, run_interval_analysis
 from ..config import CONFIG
+from ..utils.time_utils import format_time_seconds
+
+import numpy as np
 
 import logging
 logger = logging.getLogger(__name__)
@@ -199,8 +205,39 @@ class MainWindow(QMainWindow):
         self.copy_btn.setEnabled(False)
         control_grid.addWidget(self.copy_btn, 3, col_mode)
 
-        # 第 4 列 stretch
+        # 第 4 列 stretch（按钮区）
         control_grid.setColumnStretch(col_btn, 1)
+
+        # ── 区间分析模块（阈值选取区域右侧）──
+        self.analysis_group = QGroupBox("区间分析")
+        analysis_layout = QVBoxLayout(self.analysis_group)
+        analysis_layout.setContentsMargins(6, 4, 6, 4)
+        analysis_layout.setSpacing(4)
+
+        row1 = QHBoxLayout()
+        row1.addWidget(QLabel("目标信号:"))
+        self.target_signal_combo = QComboBox()
+        self.target_signal_combo.setMinimumWidth(120)
+        self.target_signal_combo.setEnabled(False)
+        row1.addWidget(self.target_signal_combo, 1)
+        analysis_layout.addLayout(row1)
+
+        row2 = QHBoxLayout()
+        row2.addWidget(QLabel("功能:"))
+        self.analysis_op_combo = QComboBox()
+        self.analysis_op_combo.addItems(list(INTERVAL_OPERATIONS.keys()))
+        self.analysis_op_combo.setEnabled(False)
+        row2.addWidget(self.analysis_op_combo, 1)
+        self.analysis_run_btn = QPushButton("执行分析")
+        self.analysis_run_btn.setEnabled(False)
+        self.analysis_run_btn.clicked.connect(self._on_run_interval_analysis)
+        row2.addWidget(self.analysis_run_btn)
+        analysis_layout.addLayout(row2)
+
+        self.analysis_interval_label = QLabel("区间: 当前视图")
+        analysis_layout.addWidget(self.analysis_interval_label)
+
+        control_grid.addWidget(self.analysis_group, 0, 4, 4, 1)
 
         # 右列：信息显示框（跨 4 行）
         self.info_display = QPlainTextEdit()
@@ -208,14 +245,15 @@ class MainWindow(QMainWindow):
         self.info_display.setMaximumHeight(140)
         self.info_display.setPlaceholderText("统计/穿越/日志信息")
         self.info_display.setStyleSheet("background-color: #fafafa;")
-        control_grid.addWidget(self.info_display, 0, 4, 4, 1)
+        control_grid.addWidget(self.info_display, 0, 5, 4, 1)
 
-        # 列比例：左 3 : 右 2
+        # 列比例：左固定，分析模块固定，右侧信息框弹性
         control_grid.setColumnStretch(0, 0)  # 固定列不 stretch
         control_grid.setColumnStretch(1, 0)
         control_grid.setColumnStretch(2, 0)
         control_grid.setColumnStretch(3, 0)
-        control_grid.setColumnStretch(4, 2)
+        control_grid.setColumnStretch(4, 0)
+        control_grid.setColumnStretch(5, 2)
 
         grid.addWidget(control_widget, 2, 0, 1, 2)
         grid.setRowStretch(2, 0)
@@ -330,6 +368,93 @@ class MainWindow(QMainWindow):
             self.preview_panel.preview_field(field_name)
         else:
             self.preview_panel.clear_preview()
+
+    # ── 区间分析 ──
+
+    def _update_target_signal_combo(self, ctx: DataContext) -> None:
+        """填充区间分析目标信号下拉框。"""
+        current_text = self.target_signal_combo.currentText()
+        self.target_signal_combo.clear()
+        self._target_combo_label_to_field: dict[str, str] = {}
+
+        for field in ctx.get_field_names():
+            label = ctx.get_label(field)
+            self._target_combo_label_to_field[label] = field
+            self.target_signal_combo.addItem(label)
+
+        has_fields = self.target_signal_combo.count() > 0
+        self.target_signal_combo.setEnabled(has_fields)
+        self.analysis_op_combo.setEnabled(has_fields)
+        self.analysis_run_btn.setEnabled(has_fields)
+
+        if current_text in self._target_combo_label_to_field:
+            self.target_signal_combo.setCurrentText(current_text)
+        self.analysis_interval_label.setText("区间: 当前视图")
+
+    def _reset_interval_analysis_controls(self) -> None:
+        """清空并禁用区间分析控件。"""
+        self.target_signal_combo.clear()
+        self.target_signal_combo.setEnabled(False)
+        self.analysis_op_combo.setEnabled(False)
+        self.analysis_run_btn.setEnabled(False)
+        self.analysis_interval_label.setText("区间: 当前视图")
+
+    def _get_analysis_interval(self) -> tuple[float, float] | None:
+        """自动确定分析区间：优先框选区域，否则当前视图。"""
+        if self.plot_widget.has_region_selection():
+            region = self.plot_widget.get_region_time_range()
+            if region is not None:
+                return region
+        if self.plot_widget.axes:
+            xlim = self.plot_widget.axes[0].get_xlim()
+            return float(xlim[0]), float(xlim[1])
+        return None
+
+    def _on_run_interval_analysis(self) -> None:
+        """执行区间分析并将结果追加到信息框。"""
+        if self.data_context is None or not self.data_context.is_loaded:
+            return
+
+        label = self.target_signal_combo.currentText()
+        field = self._target_combo_label_to_field.get(label, label)
+        time_sec = self.data_context.query.get_time_sec()
+        values = self.data_context.query.get_signal_data(field)
+
+        if time_sec is None or values is None:
+            self._append_log(f"[区间分析] 信号 {label} 无数据")
+            return
+
+        interval = self._get_analysis_interval()
+        if interval is None:
+            self._append_log("[区间分析] 无法获取分析区间")
+            return
+
+        t_start, t_end = interval
+        i_start = int(np.searchsorted(time_sec, t_start, side="left"))
+        i_end = int(np.searchsorted(time_sec, t_end, side="right"))
+
+        if i_end <= i_start:
+            self._append_log(
+                f"[区间分析] 区间内无数据: "
+                f"{format_time_seconds(t_start)} - {format_time_seconds(t_end)}"
+            )
+            return
+
+        operation = self.analysis_op_combo.currentText()
+        try:
+            result = run_interval_analysis(
+                time_sec[i_start:i_end],
+                values[i_start:i_end],
+                operation,
+            )
+        except Exception as e:
+            self._append_log(f"[区间分析] 执行失败: {e}")
+            return
+
+        self.analysis_interval_label.setText(
+            f"区间: {format_time_seconds(t_start)} - {format_time_seconds(t_end)}"
+        )
+        self._append_log(f"[区间分析] {label} {operation}: {result}")
 
     # ── 参数树操作 ──
 
@@ -515,6 +640,7 @@ class MainWindow(QMainWindow):
         self.plot_widget.clear_data_context()
         self.param_tree.clear_params()
         self.preview_panel.clear_preview()
+        self._reset_interval_analysis_controls()
         self.apply_btn.setEnabled(False)
         self.reset_btn.setEnabled(False)
         self.copy_btn.setEnabled(False)
@@ -568,6 +694,9 @@ class MainWindow(QMainWindow):
         # 绑定预览区并清空初始状态
         self.preview_panel.set_data_context(ctx)
 
+        # 填充区间分析目标信号
+        self._update_target_signal_combo(ctx)
+
         # 启用控件
         self.apply_btn.setEnabled(True)
         self.reset_btn.setEnabled(True)
@@ -615,6 +744,9 @@ class MainWindow(QMainWindow):
 
         # 清空预览区
         self.preview_panel.clear_preview()
+
+        # 清空区间分析控件
+        self._reset_interval_analysis_controls()
 
         # 禁用控件
         self.apply_btn.setEnabled(False)
