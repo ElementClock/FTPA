@@ -19,6 +19,7 @@
 - **路径常量层级错误**：`main_window.PROJECT_ROOT` 与 `DataContext.DATA_DIRS` 改为指向真实项目根目录。
 - **发动机列重复统计**：`EngineAnalysis._find_columns()` 结果去重，避免同一列被多个 pattern 重复加入。
 - **批量线程反模式**：`_BatchWorker` 改为普通 `QObject` + `moveToThread`，不再继承 `QThread` 后再次移动线程。
+- **绘图 X 轴自适应**：加载数据后绘图区时间轴初始化为数据实际范围；多个子图同步时优先以“有数据的子图”为基准，避免空子图把 X 轴重置为 0~1。
 
 ### Added
 

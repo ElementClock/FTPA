@@ -309,7 +309,7 @@ gui/ (PySide6 交互界面 + matplotlib 渲染)
   - 7 个遗留可变属性（`data` / `time_sec` / `time_vec` / `lm` / `data_path` / `excel_path` / `source_type`）已标记 `@deprecated`，推荐改用 `ctx.query.*` 方法
 - `panel_plot.py` — `PlotCanvasWidget`: 交互绘图画布外观容器，委托给 **5 个控制器**：
   - `_layout_ctrl.py` — `LayoutController`: 布局模式切换（1×1/4×1/2×2）、子图选择
-  - `_plot_renderer.py` — `PlotRenderer`: 数据绘制、信号添加/移除、右键菜单
+  - `_plot_renderer.py` — `PlotRenderer`: 数据绘制、信号添加/移除、右键菜单、X 轴自适应到有数据的时间范围
   - `_crossing_analyzer.py` — `CrossingAnalyzer`: 穿越线绘制、缩放应用/重置、Y轴自动适配、统计更新
   - `_pan_ctrl.py` — `PanController`: 左键拖拽水平平移画布（5 像素阈值区分点击/拖拽）
   - `_region_ctrl.py` — `RegionController`: 右键拖动框选时间区间（半透明覆盖层 + 时间标注）
