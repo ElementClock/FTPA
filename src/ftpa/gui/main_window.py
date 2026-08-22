@@ -412,18 +412,25 @@ class MainWindow(QMainWindow):
 
     def _on_run_interval_analysis(self) -> None:
         """执行区间分析并将结果追加到信息框（统一异常兜底）。"""
+        self.status_bar.showMessage("区间分析执行中...")
         try:
             self._do_interval_analysis()
+            self.status_bar.showMessage("区间分析完成", 3000)
         except Exception as e:
             self._append_log(f"[区间分析] 执行失败: {e}")
             logger.exception("区间分析执行失败")
+            self.status_bar.showMessage("区间分析失败", 3000)
 
     def _do_interval_analysis(self) -> None:
         """区间分析内部实现。"""
         if self.data_context is None or not self.data_context.is_loaded:
+            self._append_log("[区间分析] 数据未加载")
             return
 
         label = self.target_signal_combo.currentText()
+        if not label:
+            self._append_log("[区间分析] 请先选择目标信号")
+            return
         field = self._target_combo_label_to_field.get(label, label)
         time_sec = self.data_context.query.get_time_sec()
         values = self.data_context.query.get_signal_data(field)
