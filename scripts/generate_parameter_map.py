@@ -1,4 +1,4 @@
-"""根据 data/参数名.xlsx 生成 src/ftpa/data/parameter_map.py。
+"""根据 参数名.xlsx 生成 src/ftpa/data/parameter_map.py。
 
 生成内容：
 - PARAMETER_LABELS: 原始名称/字段名 -> 中文显示名（重复标签自动加编号后缀）
@@ -6,6 +6,9 @@
 - DISPLAY_LABEL_TO_FIELDS: 中文显示名 -> 字段名列表
 - ORIGINAL_LABEL_TO_FIELDS: Excel 原始中文标签 -> 字段名列表（跨数据源对照表）
 - DUPLICATE_LABELS: 原始中文标签 -> 编号后的显示名列表（重复标签对照表）
+
+输入文件按序在以下位置查找，取第一个存在的：
+    data/参数名.xlsx → testdata/参数名.xlsx → src/ftpa/data/参数名.xlsx
 
 用法：
     python scripts/generate_parameter_map.py
@@ -19,8 +22,22 @@ from pathlib import Path
 import pandas as pd
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-EXCEL_PATH = PROJECT_ROOT / "data" / "参数名.xlsx"
+EXCEL_CANDIDATE_DIRS = [
+    PROJECT_ROOT / "data",
+    PROJECT_ROOT / "testdata",
+    PROJECT_ROOT / "src" / "ftpa" / "data",
+]
 OUTPUT_PATH = PROJECT_ROOT / "src" / "ftpa" / "data" / "parameter_map.py"
+
+
+def _resolve_excel_path() -> Path:
+    """按候选目录顺序查找 参数名.xlsx，返回第一个存在的路径。"""
+    for d in EXCEL_CANDIDATE_DIRS:
+        p = d / "参数名.xlsx"
+        if p.is_file():
+            return p
+    searched = "\n  ".join(str(d / "参数名.xlsx") for d in EXCEL_CANDIDATE_DIRS)
+    raise FileNotFoundError(f"未找到 参数名.xlsx，已搜索以下位置：\n  {searched}")
 
 
 def _clean(value: object) -> str | None:
@@ -33,7 +50,7 @@ def _clean(value: object) -> str | None:
 
 
 def generate() -> str:
-    df = pd.read_excel(EXCEL_PATH)
+    df = pd.read_excel(_resolve_excel_path())
     if df.shape[1] < 2:
         raise ValueError("Excel 至少需要两列：原始名称、中文名称")
 
@@ -75,7 +92,7 @@ def generate() -> str:
         '"""',
         "FTPA 参数映射静态数据。",
         "",
-        "由 scripts/generate_parameter_map.py 根据 data/参数名.xlsx 自动生成，",
+        "由 scripts/generate_parameter_map.py 根据 参数名.xlsx（按 data/testdata/src 回退查找）自动生成，",
         "请勿手工编辑；如需更新请重新运行生成脚本。",
         '"""',
         "",
