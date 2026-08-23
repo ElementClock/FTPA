@@ -12,7 +12,7 @@ from .time_utils import (
     format_duration_chinese,
 )
 from .strings import make_valid_name, column_to_field_name
-from .paths import resolve_excel_path
+from .paths import resolve_mapping_path
 from .file_utils import detect_encoding, is_safe_path, sanitize_filename
 
 __all__ = [
@@ -24,7 +24,7 @@ __all__ = [
     'format_duration_chinese',
     'make_valid_name',
     'column_to_field_name',
-    'resolve_excel_path',
+    'resolve_mapping_path',
     'detect_encoding',
     'is_safe_path',
     'sanitize_filename',

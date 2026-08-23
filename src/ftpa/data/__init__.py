@@ -4,8 +4,8 @@
 """
 
 # 数据加载与文件参数
-# EXCEL_FILENAME 集中定义于 config（顶层），供 utils 与 data 共享，避免 utils 反向依赖 data（P1-ARCH-2）
-from ..config import EXCEL_FILENAME  # noqa: E402  标签映射 Excel 文件名
+# MAPPING_FILENAME 集中定义于 config（顶层），供 utils 与 data 共享，避免 utils 反向依赖 data（P1-ARCH-2）
+from ..config import MAPPING_FILENAME  # noqa: E402  标签映射文件名（参数名.csv）
 CHUNK_SIZE = 10000                   # 分块读取每块行数
 
 from .column_config import get_replacement_rules, apply_replacement_rules
@@ -20,7 +20,7 @@ from .summary import generate_data_summary, print_data_summary
 from .exporter import export_data, export_statistics
 
 __all__ = [
-    'EXCEL_FILENAME',
+    'MAPPING_FILENAME',
     'CHUNK_SIZE',
     'get_replacement_rules',
     'apply_replacement_rules',

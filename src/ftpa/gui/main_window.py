@@ -608,7 +608,7 @@ class MainWindow(QMainWindow):
 
     def _load_data(self):
         """加载数据——自动发现标签文件，不再手动选择。"""
-        from ..utils import resolve_excel_path
+        from ..utils import resolve_mapping_path
 
         settings = QSettings("FTPA", "FTPA")
         last_dir = settings.value("last_data_dir", str(DEFAULT_TXT))
@@ -617,7 +617,7 @@ class MainWindow(QMainWindow):
         if not dp:
             return
 
-        ep = resolve_excel_path()
+        ep = resolve_mapping_path()
         if not os.path.exists(ep):
             logger.warning("标签文件自动发现失败: %s", ep)
 
