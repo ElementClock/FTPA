@@ -1,13 +1,16 @@
 """使用真实数据文件的基准测试"""
 import time
 import os
+from pathlib import Path
 
 from ftpa.data.loader import param_extract, extract_time, clear_cache, _file_cache
 
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+
 
 def main():
-    data_path = r'D:\Coding\FTPA\testdata\FTPD-AG600-007-QD-260509-G-1-飞机性能操稳-32.txt'
-    excel_path = r'D:\Coding\FTPA\testdata\参数名.xlsx'
+    data_path = PROJECT_ROOT / 'testdata' / 'FTPD-AG600-007-QD-260509-G-1-飞机性能操稳-32.txt'
+    excel_path = PROJECT_ROOT / 'testdata' / '参数名.xlsx'
 
     if not os.path.exists(data_path):
         print('实际数据文件不存在，跳过真实文件基准测试')
