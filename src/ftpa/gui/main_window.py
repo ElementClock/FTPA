@@ -308,6 +308,12 @@ class MainWindow(QMainWindow):
         act_panel.triggered.connect(self._toggle_param_panel)
         menu_view.addAction(act_panel)
 
+        act_preview = QAction("曲线预览", self)
+        act_preview.setCheckable(True)
+        act_preview.setChecked(True)
+        act_preview.triggered.connect(self._toggle_preview_panel)
+        menu_view.addAction(act_preview)
+
         act_status = QAction("状态栏", self)
         act_status.setCheckable(True)
         act_status.setChecked(True)
@@ -354,6 +360,13 @@ class MainWindow(QMainWindow):
         elif not visible and self._right_panel.isVisible():
             self._right_panel.hide()
 
+    def _toggle_preview_panel(self, visible: bool):
+        """切换曲线预览区的显示/隐藏。隐藏时点选参数不再刷新预览。"""
+        self.preview_panel.setVisible(visible)
+        if not visible:
+            # 隐藏时清空已有预览，避免残留曲线占用内存
+            self.preview_panel.clear_preview()
+
     # ── 子图选择 ──
 
     def _on_subplot_selected(self, idx: int | None):
@@ -364,6 +377,8 @@ class MainWindow(QMainWindow):
 
     def _on_param_selected_for_preview(self, field_name: str):
         """点选右侧参数时，在右下角预览区刷新曲线。"""
+        if not self.preview_panel.isVisible():
+            return
         if self.data_context is not None and self.data_context.is_loaded:
             self.preview_panel.preview_field(field_name)
         else:
