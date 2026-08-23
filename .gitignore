@@ -17,6 +17,7 @@ __pycache__/
 *.egg-info/
 dist/
 build/
+build_single/
 *.egg
 
 # 日志文件
@@ -60,11 +61,10 @@ Thumbs.db
 *.xls
 *.m
 /.trae
+/.claude
 # 忽略数据 .txt 文件，但保留依赖清单 requirements.txt（P2-DOC-5）
 *.txt
 !requirements.txt
 /references
 /testdata
 CLAUDE.md
-AGENTS.md
-CHANGELOG.md
