@@ -54,15 +54,15 @@ def test_label_map():
     print("测试 M1-T4: label_map.py")
     print("="*70)
     
-    # 创建测试 Excel 文件
+    # 创建测试映射 CSV 文件
     test_data = {
         '原始名称': ['TIME', 'AirSpeed', 'Altitude'],
         '中文名称': ['时间', '空速', '高度']
     }
     df = pd.DataFrame(test_data)
     tmp_dir = tempfile.mkdtemp()
-    test_excel = os.path.join(tmp_dir, 'test_label_map.xlsx')
-    df.to_excel(test_excel, index=False)
+    test_excel = os.path.join(tmp_dir, 'test_label_map.csv')
+    df.to_csv(test_excel, index=False, encoding='utf-8-sig')
     
     try:
         # 测试 LabelMap

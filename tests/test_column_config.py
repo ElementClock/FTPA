@@ -31,7 +31,7 @@ class TestReplacementRules:
         result = apply_replacement_rules("OLD_COLUMN", rules=custom)
         assert result == "NEW_COLUMN"
 
-    def test_apply_excel_exact_name_first(self):
-        """Excel 静态映射的精确原始名优先于 ATA 子串规则。"""
+    def test_apply_exact_field_name_falls_through_to_rules(self):
+        """字段名不再由本函数做映射（映射已收敛到 参数名.csv → LabelMap）。"""
         result = apply_replacement_rules("GNSU1001_L_076")
-        assert result == "高度_G1"
+        assert "GNSU1001" in result

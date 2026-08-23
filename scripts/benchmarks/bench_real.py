@@ -10,7 +10,8 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 def main():
     data_path = PROJECT_ROOT / 'testdata' / 'FTPD-AG600-007-QD-260509-G-1-飞机性能操稳-32.txt'
-    excel_path = PROJECT_ROOT / 'testdata' / '参数名.xlsx'
+    # 映射文件现为 参数名.csv（唯一输入，位于 src/ftpa/data/）
+    excel_path = PROJECT_ROOT / 'src' / 'ftpa' / 'data' / '参数名.csv'
 
     if not os.path.exists(data_path):
         print('实际数据文件不存在，跳过真实文件基准测试')

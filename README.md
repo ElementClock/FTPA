@@ -2,8 +2,6 @@
 
 FTPA (Flight Test Performance Analysis) 是一个用于分析飞机性能操稳试飞数据的 Python 工具包，支持 TXT（Tab 分隔）和 CSV 两种飞参数据格式，提供 PySide6 GUI 交互界面（外加 `--dry-run` 无界面验证入口）。
 
-> CLI 分析模式（verify/chunked/analysis/stats/interactive）已归档到本地未跟踪的 `references/cli/` 目录（不随仓库分发），不再由 `src/ftpa/main.py` 提供。
-
 ---
 
 ## 环境要求
@@ -70,8 +68,6 @@ python -m ftpa.main --dry-run
 |------|------|--------|------|
 | `--dry-run` | 无 | `False` | 无界面模式，仅校验入口可正常加载（不创建窗口） |
 
-> 旧版 `--mode` / `--gui` / `--nrows` / `--chunksize` 等 CLI 参数已随 CLI 模块归档（归档位于本地未跟踪的 `references/cli/`），主入口不再支持。
-
 ---
 
 ## 数据文件说明
@@ -86,7 +82,7 @@ python -m ftpa.main --dry-run
 | 分隔符 | 制表符 `\t`（Tab-separated） |
 | 编码 | UTF-8 / ASCII |
 | 采样率 | ~31ms（约32Hz），TIME 格式 `HH:MM:SS:mmm` |
-| 映射表 | 需要 `参数名.xlsx` 进行"字段名↔中文标签"转换 |
+| 映射表 | 需要 `参数名.csv`（`src/ftpa/data/`，唯一输入，可维护）进行"字段名↔中文标签"转换 |
 
 ### CSV 格式（逗号分隔，无需映射表）
 
@@ -148,8 +144,8 @@ FTPA/
 │       │   ├── io.py             #   通用文件读取（含 ZIP Slip 防护）
 │       │   ├── cache.py          #   文件缓存（LRU + mtime 失效）
 │       │   ├── batch.py          #   批处理（batch_process_files 等3个函数）
-│       │   ├── label_map.py      #   标签映射（LabelMap，支持静态映射 + Excel 覆盖）
-│       │   ├── parameter_map.py  #   由 参数名.xlsx 生成的静态参数映射
+│       │   ├── label_map.py      #   标签映射（LabelMap，唯一输入 参数名.csv）
+│       │   ├── 参数名.csv         #   参数映射数据文件（唯一输入，可维护，UTF-8+BOM）
 │       │   ├── exporter.py       #   数据导出
 │       │   ├── column_config.py  #   列配置（CSV 列定义）
 │       │   ├── summary.py        #   数据摘要（generate/print_data_summary）
@@ -200,20 +196,19 @@ FTPA/
 │   ├── test_scroll_zoom.py       # 滚轮缩放协调/性能测试
 │   ├── test_interval_analysis.py # 区间分析测试
 │   ├── test_preview_panel.py     # 曲线预览面板测试
-│   ├── test_parameter_map.py     # 静态参数映射测试
+│   ├── test_parameter_map.py     # 参数映射/LabelMap 测试
 │   └── test_review_fixes.py      # 代码审阅修复回归测试
 │
 ├── testdata/                     # 样例数据目录（git 忽略，本地放置）
-│   ├── FTPD-AG600-...-32.txt     # TXT 格式飞参数据样例
-│   └── 参数名.xlsx               # 字段名↔中文标签映射表
+│   └── FTPD-AG600-...-32.txt     # TXT 格式飞参数据样例
 │
 ├── scripts/                      # 辅助脚本
-│   ├── generate_parameter_map.py # 根据 参数名.xlsx 生成静态参数映射
+│   ├── generate_parameter_map.py # 参数名.xlsx → 参数名.csv 合并桥（厂商 xlsx 更新时重跑）
 │   └── benchmarks/               # 手动运行的性能基准脚本（非 pytest 收集）
 │       ├── bench_load.py         # 合成数据加载基准
 │       └── bench_real.py         # 真实数据文件基准（读取 testdata/）
 │
-├── references/                   # 本地归档（git 忽略）：cli/ MATLAB 参考实现等历史代码
+├── references/                   # 本地参考资料（git 忽略）：MATLAB 参考实现等历史代码
 │
 ├── build/ build_single/ dist/    # PyInstaller 构建产物（git 忽略）
 │
@@ -261,8 +256,8 @@ gui/ (PySide6 交互界面 + matplotlib 渲染)
 - `csv_loader.py` — `csv_param_extract()`: CSV 格式数据加载，自动编码检测（chardet），列配置驱动处理
 - `io.py` — `read_data_file()`: 通用文件读取（支持 dtype 预声明跳过类型推断）；`resolve_zip_file()`: ZIP 自动解压（含 Zip Slip 路径遍历校验）
 - `cache.py` — `FileCache`: OrderedDict LRU 缓存 + mtime 失效策略
-- `label_map.py` — `LabelMap`: 参数名称↔中文标签双向映射（静态映射 `parameter_map.py` 为默认，Excel 存在时覆盖/补充；含单位与重复标签对照）
-  - `get_label()` / `get_var_name()` / `add()`: 标签查询与动态扩展
+- `label_map.py` — `LabelMap`: 参数名称↔中文标签双向映射（**唯一输入 `参数名.csv`**，UTF-8+BOM；编码自动检测，缺失降级空映射；含单位与重复标签编号对照；可维护数据文件，改映射无需重打包）
+  - `get_label()` / `get_var_name()` / `get_unit()` / `list_fields()` / `add()`: 标签查询与动态扩展
 - `batch.py` — `batch_process_files()` / `batch_analyze_statistics()` / `batch_export_summaries()`: 批量处理（从 `batch_processor.py` 迁入）
 - `summary.py` — `generate_data_summary()` / `print_data_summary()`: 数据摘要（从 `statistics/multi.py` 迁入，消除循环依赖）
 - `enrichment.py` — `add_weight_cg_to_data()`: 数据富化（从 `computing/weight_cg.py` 迁入，修复跨层依赖）
@@ -341,11 +336,11 @@ gui/ (PySide6 交互界面 + matplotlib 渲染)
 
 ### 6. 工具层 (utils/)
 
-**职责**: 项目通用工具，零业务依赖（`paths.py` 不再依赖 data 层，`EXCEL_FILENAME` 已上移到 `config.py`）
+**职责**: 项目通用工具，零业务依赖（`paths.py` 不再依赖 data 层，`MAPPING_FILENAME` 已上移到 `config.py`）
 
 - `time_utils.py` — `select_time_window()`: 时间窗口索引选择；`format_time_seconds()`: 数值秒→`HH:MM:SS.mmm` 格式化；`parse_time_to_seconds()` / `time_to_seconds_array()`: 时间解析
 - `strings.py` — `make_valid_name()`: 生成合法变量名；`column_to_field_name()`: 列名→字段名转换
-- `paths.py` — `resolve_path()`: 路径解析（相对路径自动搜寻已知目录）；`resolve_excel_path()`: 自动发现标签映射 Excel 文件
+- `paths.py` — `resolve_path()`: 路径解析（相对路径自动搜寻已知目录）；`resolve_mapping_path()`: 自动发现映射文件 参数名.csv（打包版 exe 同目录外部覆盖优先，改映射无需重新打包）
 - `file_utils.py` — 文件编码自动检测（chardet）、`is_safe_path()` 安全校验
 - `log_utils.py` — `setup_logging()`: 纯 Python 日志配置（零 Qt 依赖）
 

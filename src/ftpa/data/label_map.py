@@ -1,7 +1,7 @@
-"""
-标签映射模块
+"""标签映射模块
 对应 MATLAB: loadLabelMap.m
-从 Excel 加载变量名与中文标签的映射关系；Excel 缺失时回退到静态映射。
+从 参数名.csv（唯一输入，可维护数据文件）加载变量名与中文标签的映射关系；
+文件缺失或解析失败时降级为空映射（标签回退为原名称）。
 """
 
 from __future__ import annotations
@@ -11,84 +11,87 @@ import os
 
 import pandas as pd
 
+from ..utils.paths import resolve_mapping_path
 from ..utils.strings import make_valid_name
-from .parameter_map import (
-    DISPLAY_LABEL_TO_FIELDS,
-    DUPLICATE_LABELS,
-    ORIGINAL_LABEL_TO_FIELDS,
-    PARAMETER_LABELS,
-    PARAMETER_UNITS,
-)
 
 logger = logging.getLogger(__name__)
 
 
 class LabelMap:
-    """
-    变量名与中文标签的双向映射管理器。
+    """变量名与中文标签的双向映射管理器。
 
-    数据来源优先级：
-    1. 静态映射 `parameter_map.py`（由 `data/参数名.xlsx` 生成）；
-    2. 运行时传入的 Excel 文件（存在时覆盖/补充静态映射）。
+    唯一输入为 ``参数名.csv``（原始名称, 中文名称, 单位），
+    构造时未显式传路径则自动经 ``resolve_mapping_path()`` 发现默认文件。
 
     重复中文标签会生成编号后缀（如 ``1发油门_1`` / ``1发油门_2``），
     并保留“原始中文标签 -> 字段名列表”的对照表供后续查找。
     """
 
-    def __init__(self, excel_file: str | None = None):
-        self._load_static()
+    def __init__(self, csv_file: str | None = None):
+        self._init_tables()
 
-        if excel_file:
-            self._load_excel(excel_file)
+        path = self._resolve_path(csv_file)
+        if path is not None:
+            self._load_csv(path)
+        else:
+            logger.warning("映射文件未找到，使用空映射（标签回退原名称）")
 
     # ── 初始化 ──
 
-    def _load_static(self) -> None:
-        """从静态映射模块初始化。"""
-        self._orig2label: dict[str, str] = dict(PARAMETER_LABELS)
-        self._field2label: dict[str, str] = dict(PARAMETER_LABELS)
-        self._orig2unit: dict[str, str | None] = dict(PARAMETER_UNITS)
-        self._field2unit: dict[str, str | None] = dict(PARAMETER_UNITS)
+    def _resolve_path(self, csv_file: str | None) -> str | None:
+        """显式路径存在则用之；否则取默认映射文件，存在才返回。"""
+        if csv_file:
+            return csv_file if os.path.exists(csv_file) else None
+        default = resolve_mapping_path()
+        return default if os.path.exists(default) else None
 
+    def _init_tables(self) -> None:
+        self._orig2label: dict[str, str] = {}
+        self._field2label: dict[str, str] = {}
+        self._orig2unit: dict[str, str | None] = {}
+        self._field2unit: dict[str, str | None] = {}
         self._label2orig: dict[str, str] = {}
         self._label2field: dict[str, str] = {}
         self._field2orig: dict[str, str] = {}
-        self._display_label2fields: dict[str, list[str]] = {
-            k: list(v) for k, v in DISPLAY_LABEL_TO_FIELDS.items()
-        }
-        self._original_label2fields: dict[str, list[str]] = {
-            k: list(v) for k, v in ORIGINAL_LABEL_TO_FIELDS.items()
-        }
-        self._duplicate_labels: dict[str, list[str]] = {
-            k: list(v) for k, v in DUPLICATE_LABELS.items()
-        }
+        self._display_label2fields: dict[str, list[str]] = {}
+        self._original_label2fields: dict[str, list[str]] = {}
+        self._duplicate_labels: dict[str, list[str]] = {}
+        self._orig_list: list[str] = []
+        self._field_list: list[str] = []
+        self._label_list: list[str] = []
+        self._unit_list: list[str | None] = []
+        # 实际加载来源的行（list_all* 仅列这些行）
+        self._loaded = False
+        self._loaded_origs: list[str] = []
+        self._loaded_fields: list[str] = []
+        self._loaded_labels: list[str] = []
+        self._loaded_units: list[str | None] = []
 
-        for field, label in self._field2label.items():
-            self._label2field[label] = field
-            self._label2orig[label] = field
-            self._field2orig[field] = field
+    def _read_csv(self, csv_file: str) -> pd.DataFrame:
+        """读取映射 CSV：BOM→utf-8-sig，否则 chardet 检测，GB18030 回退。"""
+        with open(csv_file, "rb") as f:
+            raw = f.read()
+        if raw[:3] == b"\xef\xbb\xbf":
+            encoding = "utf-8-sig"
+        else:
+            import chardet
 
-        self._orig_list = list(self._orig2label.keys())
-        self._field_list = list(self._field2label.keys())
-        self._label_list = list(self._field2label.values())
-        self._unit_list = [self._field2unit.get(f) for f in self._field_list]
+            guess = chardet.detect(raw[:8192])
+            encoding = guess.get("encoding") or "utf-8"
+        try:
+            return pd.read_csv(csv_file, header=0, dtype=str, encoding=encoding)
+        except (UnicodeDecodeError, ValueError):
+            return pd.read_csv(csv_file, header=0, dtype=str, encoding="gb18030")
 
-        # Excel 加载后用于保持 list_all() 的旧语义：仅列出 Excel 中的行
-        self._excel_loaded = False
-        self._excel_orig_list: list[str] = []
-        self._excel_field_list: list[str] = []
-        self._excel_label_list: list[str] = []
-        self._excel_unit_list: list[str | None] = []
-
-    def _load_excel(self, excel_file: str) -> None:
-        """从 Excel 文件加载映射并覆盖/补充静态映射。"""
-        if not os.path.exists(excel_file):
-            logger.warning("映射表文件不存在，使用静态映射: %s", excel_file)
+    def _load_csv(self, csv_file: str) -> None:
+        """从 参数名.csv 加载映射（唯一输入）。"""
+        try:
+            df = self._read_csv(csv_file)
+        except Exception as e:
+            logger.warning("映射文件解析失败，使用空映射: %s — %s", csv_file, e)
             return
-
-        df = pd.read_excel(excel_file)
         if df.shape[1] < 2:
-            raise ValueError("Excel 文件至少需要两列：原始名称、中文名称")
+            raise ValueError("映射 CSV 至少需要两列：原始名称、中文名称")
 
         orig_raw = df.iloc[:, 0].astype(str).str.strip().tolist()
         label_raw = df.iloc[:, 1].astype(str).str.strip().tolist()
@@ -98,16 +101,17 @@ class LabelMap:
             else [None] * len(df)
         )
 
-        # 先统计 Excel 内每个中文标签出现次数，用于生成编号后缀
+        # 先统计每个中文标签出现次数，用于生成编号后缀
         from collections import Counter
 
         label_counts = Counter(label for label in label_raw if label and label.lower() != "nan")
         seen: dict[str, int] = {}
+        new_duplicates: list[tuple[str, str, str]] = []  # (label, display_label, field)
 
-        excel_origs: list[str] = []
-        excel_fields: list[str] = []
-        excel_labels: list[str] = []
-        excel_units: list[str | None] = []
+        loaded_origs: list[str] = []
+        loaded_fields: list[str] = []
+        loaded_labels: list[str] = []
+        loaded_units: list[str | None] = []
 
         for orig, label, unit in zip(orig_raw, label_raw, unit_raw):
             if not orig or orig.lower() == "nan":
@@ -125,10 +129,7 @@ class LabelMap:
                     self._duplicate_labels[label] = []
                 if display_label not in self._duplicate_labels[label]:
                     self._duplicate_labels[label].append(display_label)
-                logger.warning(
-                    "检测到重复中文标签 '%s'，已生成编号标签 '%s'（字段: %s）",
-                    label, display_label, field,
-                )
+                    new_duplicates.append((label, display_label, field))
             else:
                 display_label = label
 
@@ -139,16 +140,23 @@ class LabelMap:
                 original_label=label,
                 unit=unit,
             )
-            excel_origs.append(orig)
-            excel_fields.append(field)
-            excel_labels.append(display_label)
-            excel_units.append(unit)
+            loaded_origs.append(orig)
+            loaded_fields.append(field)
+            loaded_labels.append(display_label)
+            loaded_units.append(unit)
 
-        self._excel_loaded = True
-        self._excel_orig_list = excel_origs
-        self._excel_field_list = excel_fields
-        self._excel_label_list = excel_labels
-        self._excel_unit_list = excel_units
+        self._loaded = True
+        self._loaded_origs = loaded_origs
+        self._loaded_fields = loaded_fields
+        self._loaded_labels = loaded_labels
+        self._loaded_units = loaded_units
+
+        if new_duplicates:
+            samples = ", ".join(f"'{l}'→'{d}'" for l, d, _ in new_duplicates[:3])
+            logger.warning(
+                "映射含 %d 个重复中文标签，已生成编号后缀（如 %s …）",
+                len(new_duplicates), samples,
+            )
 
     @staticmethod
     def _clean_unit(value: object) -> str | None:
@@ -280,14 +288,18 @@ class LabelMap:
 
     # ── 列表输出 ──
 
+    def list_fields(self) -> list[str]:
+        """返回全部字段名列表（完整参数库用）。"""
+        return list(self._field_list)
+
     def _list_source(self):
-        """返回 list_all* 使用的列表元组。Excel 加载后保持旧语义只列 Excel 行。"""
-        if self._excel_loaded:
+        """返回 list_all* 使用的列表元组（加载来源行）。"""
+        if self._loaded:
             return (
-                self._excel_orig_list,
-                self._excel_field_list,
-                self._excel_label_list,
-                self._excel_unit_list,
+                self._loaded_origs,
+                self._loaded_fields,
+                self._loaded_labels,
+                self._loaded_units,
             )
         return self._orig_list, self._field_list, self._label_list, self._unit_list
 

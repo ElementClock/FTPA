@@ -74,15 +74,15 @@ class TestLabelMap:
     
     @pytest.fixture
     def temp_excel_file(self):
-        """创建临时 Excel 文件"""
+        """创建临时映射 CSV 文件（参数名.csv 同构：原始名称,中文名称,单位）"""
         # 使用临时目录避免 Windows 文件锁定问题
         temp_dir = tempfile.mkdtemp()
-        temp_path = os.path.join(temp_dir, 'test_labels.xlsx')
+        temp_path = os.path.join(temp_dir, 'test_labels.csv')
         df = pd.DataFrame({
             '原始名称': ['TIME', 'AirSpeed', 'Altitude'],
             '中文名称': ['时间', '空速', '高度']
         })
-        df.to_excel(temp_path, index=False)
+        df.to_csv(temp_path, index=False, encoding='utf-8-sig')
         yield temp_path
         # 清理临时目录
         import shutil
