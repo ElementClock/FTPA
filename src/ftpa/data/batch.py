@@ -90,7 +90,7 @@ def batch_process_files(file_pattern: str,
                 'status': 'success',
                 'output': actual_path,
                 'records': len(data['TIME']),
-                'channels': len(data) - 1,
+                'channels': sum(1 for k in data if k not in ('TIME', 'filename')),
                 'custom_result': custom_result
             }
 
@@ -98,7 +98,8 @@ def batch_process_files(file_pattern: str,
             results['success_count'] += 1
 
             if verbose:
-                print(f"  ✓ 成功: {len(data['TIME'])} 条记录, {len(data) - 1} 个通道")
+                print(f"  ✓ 成功: {len(data['TIME'])} 条记录, "
+                      f"{sum(1 for k in data if k not in ('TIME', 'filename'))} 个通道")
                 print(f"  ✓ 输出: {actual_path}")
 
         except Exception as e:

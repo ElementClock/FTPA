@@ -263,15 +263,32 @@ class TestCsvParamExtractDateFormat:
             os.unlink(path)
 
     def test_time_values_are_relative(self):
-        """TIME 数组为相对时间（timedelta64），首点为 0。"""
+        """TIME 数组为相对时间（timedelta64），首点为 0 且按秒递增。"""
         path = _write_csv(_make_csv_content(n_rows=12))
         try:
             data = csv_param_extract(path)
             time_sec = data['TIME'].astype('timedelta64[ns]').astype(np.float64) / 1e9
             # 第一个时间点应为 0（相对时间基准）
             assert time_sec[0] == pytest.approx(0.0)
+            # 时间应包含“时分秒”信息，而非全 0
+            assert len(time_sec) == 12
+            np.testing.assert_allclose(time_sec, np.arange(12))
             # 长度与过滤后行数一致
             assert len(time_sec) == len(data['温度'])
+        finally:
+            os.unlink(path)
+
+    def test_date_column_preserved_and_flight_time_used(self):
+        """原始日期列应保留，且“飞行时间”作为 TIME 数据源。"""
+        path = _write_csv(_make_csv_content(n_rows=12))
+        try:
+            data = csv_param_extract(path)
+            # 原始日期列被保留
+            assert '日期' in data
+            # 飞行时间列不再出现在普通列中（已转换为 TIME）
+            assert '飞行时间' not in data
+            # TIME 是 timedelta64
+            assert np.issubdtype(data['TIME'].dtype, np.timedelta64)
         finally:
             os.unlink(path)
 

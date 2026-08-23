@@ -5,6 +5,46 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 并遵循 [语义化版本](https://semver.org/lang/zh-CN/spec/v2.0.0.html)。
 
+## [Unreleased]
+
+### Fixed
+
+- **CSV 时间解析丢失时分秒**：`csv_loader._convert_flight_time()` 现在保留合并后的 `_datetime` 作为“飞行时间”列，`TIME` 不再因只保留日期列而全为 0；原始“日期”列和 UTC+8 偏移逻辑保留。
+- **小 CSV 文件加载崩溃**：`loader._trim_data()` 不再对 pandas 扩展数组调用无参构造，长度不足时返回同类型空切片，避免 `ArrowStringArray` 等类型抛 `TypeError`。
+- **圆拟合经纬度参数颠倒**：`DataContext.compute_fitted_circle()` 与 `panel_track._compute_circle()` 统一为先经度后纬度，避免半径计算偏差。
+- **全时段窗口失效**：`select_time_window()` 支持 `None` / 空字符串表示全时段；统计、穿越、起降、拟合等面板不再因默认全时段传入空字符串而只取最后一点。
+- **数据摘要通道数多算**：`generate_data_summary()` 不再把 `filename` 等元数据键计入 `total_channels`；批量处理中的通道数同步修正。
+- **导出面板摘要表格为空**：`panel_export._run_summary()` 按 `channels` 字典填充表格。
+- **统计结果表格无法分列**：`StatsTableWidget.populate()` 兼容 `statistics_params()` 现有字符串格式，正确拆分各统计列。
+- **路径常量层级错误**：`main_window.PROJECT_ROOT` 与 `DataContext.DATA_DIRS` 改为指向真实项目根目录。
+- **发动机列重复统计**：`EngineAnalysis._find_columns()` 结果去重，避免同一列被多个 pattern 重复加入。
+- **批量线程反模式**：`_BatchWorker` 改为普通 `QObject` + `moveToThread`，不再继承 `QThread` 后再次移动线程。
+- **绘图 X 轴自适应**：加载数据后绘图区时间轴初始化为数据实际范围；多个子图同步时优先以“有数据的子图”为基准，避免空子图把 X 轴重置为 0~1。
+
+### Added
+
+- **JSON 数据导出**：`export_data()` 支持 `output_format='json'`，并支持 `gzip` 压缩；导出面板在 JSON 格式下自动将 `snappy` 重置为“无”。
+- **插件进度回调透传**：`PluginManager.execute_analysis()` 将 `progress_callback` 传给各插件 `analyze()`。
+- **回归测试**：新增 `tests/test_review_fixes.py`，覆盖小 CSV 加载、全时段窗口、圆拟合参数顺序、摘要通道数、发动机列去重、插件进度回调透传。
+- **桌面启动脚本**：新增 `FTPA_GUI.bat`，Windows 下双击即可直接启动 GUI，自动使用项目虚拟环境 Python 并设置 `PYTHONPATH`。
+- **静态参数映射**：新增 `src/ftpa/data/parameter_map.py` 与 `scripts/generate_parameter_map.py`，由 `data/参数名.xlsx` 生成字段名→中文名、单位、重复标签对照表。
+- **单位支持**：`LabelMap` 新增 `get_unit()` / `list_all_with_units()`；GUI 参数树显示“中文标签 (单位)”。
+- **重复标签对照**：新增 `get_var_names()` / `get_duplicate_labels()`，重复中文标签自动加编号后缀并保留原始标签对照表。
+- **完整参数库展示**：右侧参数树显示静态参数库（538 项）+ 当前数据额外字段；当前数据中不存在的参数置灰不可选/拖拽。
+- **搜索式参数选择对话框**：右键“添加参数...”打开 `ParameterPickerDialog`，支持搜索、单位显示、不可用参数置灰，避免参数过多导致菜单占满屏幕。
+- **右下角曲线预览区**：新增 `PreviewPanel`，点选右侧参数时在右下角预览区刷新显示对应数据曲线。
+- **区间分析功能**：新增 `interval_analysis.py` 操作注册表，支持积分、最大值、最小值、平均值、极值；GUI 左下角新增“区间分析”模块，基于当前视图或框选区间分析目标信号并输出到信息框。
+
+### Changed
+
+- **README 项目结构同步**：移除当前仓库不存在的 `references/`、`testdata/`、`logs/`、`examples/`、`docs/`、`CLAUDE.md` 等目录说明，补充 `AGENTS.md` 与实际测试文件。
+- **`LabelMap` 数据源**：改为“静态映射 + Excel 可选覆盖”，Excel 缺失时自动回退到静态映射；重复标签发出警告并沿用原行为。
+- **`column_config.py`**：`apply_replacement_rules()` 优先使用 Excel 静态映射的精确原始名匹配，再回退到 ATA 子串替换。
+- **参数树/参数选择**：`FieldResolver` / `DataContext` 新增完整参数库查询；`ParameterTreeWidget` 支持不可用参数置灰；`PlotRenderer` 右键菜单改为搜索式对话框添加参数。
+- **右侧布局**：参数树下方新增曲线预览区，右侧改为垂直分割布局，点选参数即时预览。
+- **预览区精简**：预览曲线不再显示参数名、时间、刻度等已知信息，最大化曲线显示区域。
+- **控制面板布局**：阈值控制区右侧新增“区间分析”模块，信息显示框右移，支持可扩展分析操作。
+
 ## [1.0.1] - 2026-08-01
 
 本次发布为架构审计修复版本：归档遗留 CLI、将 GUI 确立为唯一入口，并将数据层重构为以 `DataContext` Facade 为核心、由可插拔子服务协作的结构。同时消除多处跨层 / 循环依赖，并修复若干安全与质量问题。

@@ -32,6 +32,8 @@ from PySide6.QtWidgets import (
     QComboBox,
     QFileDialog,
     QGridLayout,
+    QGroupBox,
+    QHBoxLayout,
     QLabel,
     QLineEdit,
     QMainWindow,
@@ -40,20 +42,26 @@ from PySide6.QtWidgets import (
     QPushButton,
     QSplitter,
     QStatusBar,
+    QVBoxLayout,
     QWidget,
 )
 
 from .panel_plot import PlotCanvasWidget
+from .panel_preview import PreviewPanel
 from .services import DataContext
 from .widgets import ParameterTreeWidget
 from .. import __version__
+from ..analysis.interval_analysis import INTERVAL_OPERATIONS, run_interval_analysis
 from ..config import CONFIG
+from ..utils.time_utils import format_time_seconds
+
+import numpy as np
 
 import logging
 logger = logging.getLogger(__name__)
 
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_TXT = PROJECT_ROOT / "FTPD-AG600-007-QD-260509-G-1-飞机性能操稳-32.txt"
 
 
@@ -90,14 +98,32 @@ class MainWindow(QMainWindow):
         self.plot_widget.subplot_fields_changed.connect(self._on_subplot_fields_changed)
 
         self.param_tree = ParameterTreeWidget()
+        self.preview_panel = PreviewPanel()
+        self.param_tree.param_selected.connect(self._on_param_selected_for_preview)
+
+        # 右侧容器：参数树 + 曲线预览区（右下角）
+        self._right_panel = QWidget()
+        self._right_layout = QVBoxLayout(self._right_panel)
+        self._right_layout.setContentsMargins(0, 0, 0, 0)
+        self._right_layout.setSpacing(0)
+
+        self._right_splitter = QSplitter(Qt.Vertical)
+        self._right_splitter.addWidget(self.param_tree)
+        self._right_splitter.addWidget(self.preview_panel)
+        self._right_splitter.setStretchFactor(0, 3)
+        self._right_splitter.setStretchFactor(1, 2)
+        self._right_splitter.setCollapsible(0, False)
+        self._right_splitter.setCollapsible(1, True)
+        self._right_splitter.setSizes([400, 180])
+        self._right_layout.addWidget(self._right_splitter)
 
         self._splitter = QSplitter(Qt.Horizontal)
         self._splitter.addWidget(self.plot_widget)
-        self._splitter.addWidget(self.param_tree)
+        self._splitter.addWidget(self._right_panel)
         self._splitter.setStretchFactor(0, 5)
         self._splitter.setStretchFactor(1, 1)
         self._splitter.setCollapsible(0, False)   # 绘图区不可折叠
-        self._splitter.setCollapsible(1, True)    # 参数面板可折叠
+        self._splitter.setCollapsible(1, True)    # 右侧面板可折叠
 
         # 参数面板最小宽度：控制面板在小于此宽度时自动隐藏
         # 默认阈值 50px（约为 QSplitter 默认折叠阈值 ~150px 的 1/3）
@@ -179,8 +205,39 @@ class MainWindow(QMainWindow):
         self.copy_btn.setEnabled(False)
         control_grid.addWidget(self.copy_btn, 3, col_mode)
 
-        # 第 4 列 stretch
+        # 第 4 列 stretch（按钮区）
         control_grid.setColumnStretch(col_btn, 1)
+
+        # ── 区间分析模块（阈值选取区域右侧）──
+        self.analysis_group = QGroupBox("区间分析")
+        analysis_layout = QVBoxLayout(self.analysis_group)
+        analysis_layout.setContentsMargins(6, 4, 6, 4)
+        analysis_layout.setSpacing(4)
+
+        row1 = QHBoxLayout()
+        row1.addWidget(QLabel("目标信号:"))
+        self.target_signal_combo = QComboBox()
+        self.target_signal_combo.setMinimumWidth(120)
+        self.target_signal_combo.setEnabled(False)
+        row1.addWidget(self.target_signal_combo, 1)
+        analysis_layout.addLayout(row1)
+
+        row2 = QHBoxLayout()
+        row2.addWidget(QLabel("功能:"))
+        self.analysis_op_combo = QComboBox()
+        self.analysis_op_combo.addItems(list(INTERVAL_OPERATIONS.keys()))
+        self.analysis_op_combo.setEnabled(False)
+        row2.addWidget(self.analysis_op_combo, 1)
+        self.analysis_run_btn = QPushButton("执行分析")
+        self.analysis_run_btn.setEnabled(False)
+        self.analysis_run_btn.clicked.connect(self._on_run_interval_analysis)
+        row2.addWidget(self.analysis_run_btn)
+        analysis_layout.addLayout(row2)
+
+        self.analysis_interval_label = QLabel("区间: 当前视图")
+        analysis_layout.addWidget(self.analysis_interval_label)
+
+        control_grid.addWidget(self.analysis_group, 0, 4, 4, 1)
 
         # 右列：信息显示框（跨 4 行）
         self.info_display = QPlainTextEdit()
@@ -188,14 +245,15 @@ class MainWindow(QMainWindow):
         self.info_display.setMaximumHeight(140)
         self.info_display.setPlaceholderText("统计/穿越/日志信息")
         self.info_display.setStyleSheet("background-color: #fafafa;")
-        control_grid.addWidget(self.info_display, 0, 4, 4, 1)
+        control_grid.addWidget(self.info_display, 0, 5, 4, 1)
 
-        # 列比例：左 3 : 右 2
+        # 列比例：左固定，分析模块固定，右侧信息框弹性
         control_grid.setColumnStretch(0, 0)  # 固定列不 stretch
         control_grid.setColumnStretch(1, 0)
         control_grid.setColumnStretch(2, 0)
         control_grid.setColumnStretch(3, 0)
-        control_grid.setColumnStretch(4, 2)
+        control_grid.setColumnStretch(4, 0)
+        control_grid.setColumnStretch(5, 2)
 
         grid.addWidget(control_widget, 2, 0, 1, 2)
         grid.setRowStretch(2, 0)
@@ -279,22 +337,22 @@ class MainWindow(QMainWindow):
         if len(sizes) < 2:
             return
         panel_width = sizes[1]
-        if panel_width < self._PANEL_COLLAPSE_THRESHOLD and self.param_tree.isVisible():
-            self.param_tree.hide()
+        if panel_width < self._PANEL_COLLAPSE_THRESHOLD and self._right_panel.isVisible():
+            self._right_panel.hide()
             self.status_bar.showMessage("参数面板已隐藏，点击菜单「视图 → 参数面板」恢复", 3000)
-        elif panel_width >= self._PANEL_COLLAPSE_THRESHOLD and not self.param_tree.isVisible():
-            self.param_tree.show()
+        elif panel_width >= self._PANEL_COLLAPSE_THRESHOLD and not self._right_panel.isVisible():
+            self._right_panel.show()
 
     def _toggle_param_panel(self, visible: bool):
         """切换参数面板的显示/隐藏。"""
-        if visible and not self.param_tree.isVisible():
-            self.param_tree.show()
+        if visible and not self._right_panel.isVisible():
+            self._right_panel.show()
             # 恢复到合理宽度
             sizes = self._splitter.sizes()
             total = sum(sizes) if sizes else 1120
             self._splitter.setSizes([int(total * 0.85), int(total * 0.15)])
-        elif not visible and self.param_tree.isVisible():
-            self.param_tree.hide()
+        elif not visible and self._right_panel.isVisible():
+            self._right_panel.hide()
 
     # ── 子图选择 ──
 
@@ -303,6 +361,111 @@ class MainWindow(QMainWindow):
         self.param_tree.set_selected_subplot(idx)
         if idx is not None:
             self.status_bar.showMessage(f"已选中子图 {idx + 1}")
+
+    def _on_param_selected_for_preview(self, field_name: str):
+        """点选右侧参数时，在右下角预览区刷新曲线。"""
+        if self.data_context is not None and self.data_context.is_loaded:
+            self.preview_panel.preview_field(field_name)
+        else:
+            self.preview_panel.clear_preview()
+
+    # ── 区间分析 ──
+
+    def _update_target_signal_combo(self, ctx: DataContext) -> None:
+        """填充区间分析目标信号下拉框。"""
+        current_text = self.target_signal_combo.currentText()
+        self.target_signal_combo.clear()
+        self._target_combo_label_to_field: dict[str, str] = {}
+
+        for field in ctx.get_field_names():
+            label = ctx.get_label(field)
+            self._target_combo_label_to_field[label] = field
+            self.target_signal_combo.addItem(label)
+
+        has_fields = self.target_signal_combo.count() > 0
+        self.target_signal_combo.setEnabled(has_fields)
+        self.analysis_op_combo.setEnabled(has_fields)
+        self.analysis_run_btn.setEnabled(has_fields)
+
+        if current_text in self._target_combo_label_to_field:
+            self.target_signal_combo.setCurrentText(current_text)
+        self.analysis_interval_label.setText("区间: 当前视图")
+
+    def _reset_interval_analysis_controls(self) -> None:
+        """清空并禁用区间分析控件。"""
+        self.target_signal_combo.clear()
+        self.target_signal_combo.setEnabled(False)
+        self.analysis_op_combo.setEnabled(False)
+        self.analysis_run_btn.setEnabled(False)
+        self.analysis_interval_label.setText("区间: 当前视图")
+
+    def _get_analysis_interval(self) -> tuple[float, float] | None:
+        """自动确定分析区间：优先框选区域，否则当前视图。"""
+        if self.plot_widget.has_region_selection():
+            region = self.plot_widget.get_region_time_range()
+            if region is not None:
+                return region
+        if self.plot_widget.axes:
+            xlim = self.plot_widget.axes[0].get_xlim()
+            return float(xlim[0]), float(xlim[1])
+        return None
+
+    def _on_run_interval_analysis(self) -> None:
+        """执行区间分析并将结果追加到信息框（统一异常兜底）。"""
+        self.status_bar.showMessage("区间分析执行中...")
+        try:
+            self._do_interval_analysis()
+            self.status_bar.showMessage("区间分析完成", 3000)
+        except Exception as e:
+            self._append_log(f"[区间分析] 执行失败: {e}")
+            logger.exception("区间分析执行失败")
+            self.status_bar.showMessage("区间分析失败", 3000)
+
+    def _do_interval_analysis(self) -> None:
+        """区间分析内部实现。"""
+        if self.data_context is None or not self.data_context.is_loaded:
+            self._append_log("[区间分析] 数据未加载")
+            return
+
+        label = self.target_signal_combo.currentText()
+        if not label:
+            self._append_log("[区间分析] 请先选择目标信号")
+            return
+        field = self._target_combo_label_to_field.get(label, label)
+        time_sec = self.data_context.query.get_time_sec()
+        values = self.data_context.query.get_signal_data(field)
+
+        if time_sec is None or values is None:
+            self._append_log(f"[区间分析] 信号 {label} 无数据")
+            return
+
+        interval = self._get_analysis_interval()
+        if interval is None:
+            self._append_log("[区间分析] 无法获取分析区间")
+            return
+
+        t_start, t_end = interval
+        i_start = int(np.searchsorted(time_sec, t_start, side="left"))
+        i_end = int(np.searchsorted(time_sec, t_end, side="right"))
+
+        if i_end <= i_start:
+            self._append_log(
+                f"[区间分析] 区间内无数据: "
+                f"{format_time_seconds(t_start)} - {format_time_seconds(t_end)}"
+            )
+            return
+
+        operation = self.analysis_op_combo.currentText()
+        result = run_interval_analysis(
+            time_sec[i_start:i_end],
+            values[i_start:i_end],
+            operation,
+        )
+
+        self.analysis_interval_label.setText(
+            f"区间: {format_time_seconds(t_start)} - {format_time_seconds(t_end)}"
+        )
+        self._append_log(f"[区间分析] {label} {operation}: {result}")
 
     # ── 参数树操作 ──
 
@@ -487,6 +650,8 @@ class MainWindow(QMainWindow):
         self.data_context = None
         self.plot_widget.clear_data_context()
         self.param_tree.clear_params()
+        self.preview_panel.clear_preview()
+        self._reset_interval_analysis_controls()
         self.apply_btn.setEnabled(False)
         self.reset_btn.setEnabled(False)
         self.copy_btn.setEnabled(False)
@@ -529,13 +694,19 @@ class MainWindow(QMainWindow):
         # 重置子图（不自动填充默认信号）
         self.plot_widget.subplot_fields = {i: [] for i in range(len(self.plot_widget.axes))}
 
-        # 填充参数树
-        field_labels = ctx.get_field_labels()
-        self.param_tree.set_params(field_labels)
+        # 填充参数树（完整参数库 + 当前数据可用标记）
+        field_labels, available_fields = ctx.get_all_field_labels_with_units()
+        self.param_tree.set_params(field_labels, available_fields=available_fields)
         self.param_tree.update_indicators(self.plot_widget.subplot_fields)
 
         # 填充绘图区
         self.plot_widget.set_data_context(ctx)
+
+        # 绑定预览区并清空初始状态
+        self.preview_panel.set_data_context(ctx)
+
+        # 填充区间分析目标信号
+        self._update_target_signal_combo(ctx)
 
         # 启用控件
         self.apply_btn.setEnabled(True)
@@ -581,6 +752,12 @@ class MainWindow(QMainWindow):
 
         # 清空参数树
         self.param_tree.clear_params()
+
+        # 清空预览区
+        self.preview_panel.clear_preview()
+
+        # 清空区间分析控件
+        self._reset_interval_analysis_controls()
 
         # 禁用控件
         self.apply_btn.setEnabled(False)
@@ -719,6 +896,9 @@ class MainWindow(QMainWindow):
             self.plot_widget.clear_data_context()
             if hasattr(self.plot_widget, 'canvas'):
                 self.plot_widget.canvas.close()
+            self.preview_panel.clear_preview()
+            if hasattr(self.preview_panel, 'canvas'):
+                self.preview_panel.canvas.close()
         except Exception:
             logger.warning("Canvas 清理失败", exc_info=True)
 

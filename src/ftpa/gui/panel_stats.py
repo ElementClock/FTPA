@@ -51,7 +51,8 @@ class StatisticsPanel(QWidget):
         """设置数据上下文，更新信号选择器。"""
         self.ctx = ctx
         signals = list(ctx.get_field_labels().values())
-        # 更新所有信号选择器（由各子面板自行处理）
+        self.cross_signal.clear()
+        self.cross_signal.addItems(signals)
 
     # ---------- 参数统计 ----------
 
@@ -90,7 +91,7 @@ class StatisticsPanel(QWidget):
         text = self.param_signal_input.text().strip()
         signal_ids = [s.strip() for s in text.split(",") if s.strip()] if text else None
         try:
-            results = self.ctx.compute_parameter_stats(t_start or "", t_end or "", signal_ids)
+            results = self.ctx.compute_parameter_stats(t_start, t_end, signal_ids)
             self.param_table.populate(results)
         except Exception as e:
             self.param_table.setRowCount(1)
@@ -156,7 +157,7 @@ class StatisticsPanel(QWidget):
 
         try:
             results = self.ctx.compute_crossing_analysis(
-                signal_ids, mode, threshold, t_start or "", t_end or ""
+                signal_ids, mode, threshold, t_start, t_end
             )
             self.cross_result.setPlainText("\n".join(results) if results else "无穿越结果")
         except Exception as e:
@@ -187,7 +188,7 @@ class StatisticsPanel(QWidget):
             return
         t_start, t_end = self.to_time.get_time_range()
         try:
-            result = self.ctx.compute_takeoff_landing_stats(t_start or "", t_end or "")
+            result = self.ctx.compute_takeoff_landing_stats(t_start, t_end)
             self.to_result.setPlainText(result)
         except Exception as e:
             self.to_result.setPlainText(f"错误: {e}")

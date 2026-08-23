@@ -243,3 +243,32 @@ class TestFullRebuildUsesRenderFromScratch:
                 for call_args in mock_render.call_args_list:
                     # 每次调用传入 crossing_fields 集合
                     assert isinstance(call_args[0][2], set)
+
+
+# ── X 轴参考范围自适应 ──
+
+
+class TestReferenceXlim:
+    def test_uses_first_nonempty_subplot(self, renderer, mock_widget):
+        mock_widget.subplot_fields = {0: [], 1: ["ALT"]}
+        mock_widget.axes[0].get_xlim.return_value = (0.0, 1.0)
+        mock_widget.axes[1].get_xlim.return_value = (100.0, 200.0)
+
+        assert renderer.get_reference_xlim() == (100.0, 200.0)
+
+    def test_falls_back_to_data_range_when_no_fields(self, renderer, mock_widget):
+        mock_widget.subplot_fields = {0: [], 1: []}
+        mock_widget.ctx.query.get_time_sec.return_value = np.array([5.0, 3594.9])
+
+        assert renderer.get_reference_xlim() == (5.0, 3594.9)
+
+    def test_set_data_context_sets_data_xlim(self, renderer, mock_widget):
+        mock_widget.ctx.query.get_time_sec.return_value = np.array([5.0, 3594.9])
+        with patch.object(renderer, "rebuild_plot"):
+            with patch.object(mock_widget._crossing, "save_initial_time_range"):
+                with patch.object(mock_widget._crossing, "update_stats"):
+                    with patch.object(mock_widget._pan, "reset"):
+                        renderer.set_data_context(mock_widget.ctx)
+
+        for ax in mock_widget.axes:
+            ax.set_xlim.assert_called_with(5.0, 3594.9)

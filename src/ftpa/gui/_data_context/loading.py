@@ -65,15 +65,20 @@ class TxtLoader:
                 logger.warning("时间列非单调递增，缩放/统计可能不准确")
 
             lm: LabelMap | None = None
-            if os.path.exists(excel_path):
+            try:
+                from ...data.enrichment import add_weight_cg_to_data  # P1-ARCH-3: 迁移至 data 层
+                # 优先使用 Excel 覆盖，缺失时 LabelMap 内部回退到静态映射
+                lm = LabelMap(excel_path if excel_path else None)
+                add_weight_cg_to_data(raw, lm)
+            except LabelMapLoadError:
+                raise
+            except Exception as e:
+                logger.warning("映射表加载失败，回退到静态映射: %s", e)
                 try:
-                    from ...data.enrichment import add_weight_cg_to_data  # P1-ARCH-3: 迁移至 data 层
-                    lm = LabelMap(excel_path)
+                    lm = LabelMap()
                     add_weight_cg_to_data(raw, lm)
-                except LabelMapLoadError:
-                    raise
-                except Exception as e:
-                    logger.warning("映射表加载失败，将使用无标签模式: %s", e)
+                except Exception:
+                    logger.warning("静态映射加载失败，将使用无标签模式")
                     lm = None
 
             return LoadResult(

@@ -4,8 +4,10 @@
 
 from __future__ import annotations
 
+import re
+
 from PySide6.QtCore import Qt, QSortFilterProxyModel, QStringListModel, Signal
-from PySide6.QtGui import QStandardItem, QStandardItemModel
+from PySide6.QtGui import QBrush, QColor, QStandardItem, QStandardItemModel
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -219,15 +221,26 @@ class ParameterTreeWidget(QWidget):
         self.tree.itemClicked.connect(self._on_item_clicked)
         layout.addWidget(self.tree, 1)
 
-    def set_params(self, field_labels: dict[str, str]):
-        """设置参数列表：field_name -> display_label。"""
+    def set_params(self, field_labels: dict[str, str], available_fields: set[str] | None = None):
+        """设置参数列表：field_name -> display_label。
+
+        Args:
+            field_labels: 字段名 -> 显示标签（可含单位）。
+            available_fields: 当前数据中可用的字段名集合；不在集合中的参数置灰不可选。
+                为 None 时全部可用（保持旧行为）。
+        """
         self._field_map = {}
         self.tree.clear()
         for field_name, display_label in sorted(field_labels.items(), key=lambda x: x[1]):
             self._field_map[display_label] = field_name
             item = QTreeWidgetItem([display_label])
             item.setData(0, Qt.UserRole, field_name)
-            item.setFlags(item.flags() | Qt.ItemIsSelectable)
+            if available_fields is not None and field_name not in available_fields:
+                # 参数库中存在但当前数据中不存在：置灰、不可选、不可拖拽
+                item.setFlags(item.flags() & ~Qt.ItemIsEnabled)
+                item.setForeground(0, QBrush(QColor("#999999")))
+            else:
+                item.setFlags(item.flags() | Qt.ItemIsSelectable)
             self.tree.addTopLevelItem(item)
 
     def clear_params(self) -> None:
@@ -287,6 +300,15 @@ class ParameterTreeWidget(QWidget):
         self.param_selected.emit(field_name)
 
 
+# statistics_params() 输出格式：
+#   信号名  起始=1, 结束=3, 最小=1, 最大=3, 平均=2, 标准差=1, 点数=3
+_STAT_LINE_RE = re.compile(
+    r"^(?P<label>.*?)\s*起始=(?P<start>[^,]+), 结束=(?P<end>[^,]+), "
+    r"最小=(?P<min>[^,]+), 最大=(?P<max>[^,]+), 平均=(?P<mean>[^,]+), "
+    r"标准差=(?P<std>[^,]+), 点数=(?P<points>[^,]+)$"
+)
+
+
 class StatsTableWidget(QTableWidget):
     """参数统计结果表格（7 列预定义）。"""
 
@@ -301,18 +323,33 @@ class StatsTableWidget(QTableWidget):
         self.setAlternatingRowColors(True)
 
     def populate(self, stats_lines: list[str]):
-        """从 statistics_params 的字符串列表填充表格。"""
+        """从 statistics_params 的字符串列表填充表格。
+
+        兼容 statistics_params() 的现有输出格式：
+        ``信号名  起始=..., 结束=..., 最小=..., 最大=..., 平均=..., 标准差=..., 点数=...``
+        """
         self.setRowCount(0)
         for line in stats_lines:
-            # 格式例如: "信号名  起始值  结束值  最小值  最大值  平均值  标准差  点数"
-            parts = line.split("\t")
-            if len(parts) < 2:
-                continue
+            m = _STAT_LINE_RE.match(line)
+            if m:
+                parts = [
+                    m.group("label").strip(),
+                    m.group("start").strip(),
+                    m.group("end").strip(),
+                    m.group("min").strip(),
+                    m.group("max").strip(),
+                    m.group("mean").strip(),
+                    m.group("std").strip(),
+                    m.group("points").strip(),
+                ]
+            else:
+                # 非标准行（如错误提示）整行放入第一列
+                parts = [line.strip()]
             row = self.rowCount()
             self.insertRow(row)
             for col, part in enumerate(parts):
                 if col < self.columnCount():
-                    self.setItem(row, col, QTableWidgetItem(part.strip()))
+                    self.setItem(row, col, QTableWidgetItem(part))
 
     def clear_data(self):
         self.setRowCount(0)

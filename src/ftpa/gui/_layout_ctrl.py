@@ -136,11 +136,11 @@ class LayoutController:
         # 设置底部子图的 X 轴标签，并为所有子图设置时间格式化
         self._apply_bottom_axis_labels(mode)
 
-        # 同步所有子图 X 轴范围：以 axes[0] 为基准
+        # 同步所有子图 X 轴范围：优先以有数据的子图为基准
         # 防止各子图因 ax.plot() 自动缩放而产生不一致的 xlim
-        if w.axes:
-            ref_xlim = w.axes[0].get_xlim()
-            for ax in w.axes[1:]:
+        ref_xlim = w._renderer.get_reference_xlim()
+        if ref_xlim is not None:
+            for ax in w.axes:
                 ax.set_xlim(ref_xlim)
 
     def _apply_bottom_axis_labels(self, mode: str) -> None:

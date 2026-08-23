@@ -2,7 +2,7 @@
 
 FTPA (Flight Test Performance Analysis) 是一个用于分析飞机性能操稳试飞数据的 Python 工具包，支持 TXT（Tab 分隔）和 CSV 两种飞参数据格式，提供 PySide6 GUI 交互界面（外加 `--dry-run` 无界面验证入口）。
 
-> CLI 分析模式（verify/chunked/analysis/stats/interactive）已归档到 `references/cli/`，不再由 `src/ftpa/main.py` 提供。
+> CLI 分析模式（verify/chunked/analysis/stats/interactive）已归档（当前仓库未保留归档目录），不再由 `src/ftpa/main.py` 提供。
 
 ---
 
@@ -40,6 +40,12 @@ python -m ftpa.main --dry-run
 ftpa
 ```
 
+### 桌面端直接运行
+
+Windows 下可直接双击项目根目录的 `FTPA_GUI.bat` 启动 GUI，
+脚本会自动使用 `.venv\Scripts\python.exe`（不存在时回退到系统 `python`），
+无需手动输入命令。
+
 ## 使用方法
 
 ### GUI 模式（默认）
@@ -64,7 +70,7 @@ python -m ftpa.main --dry-run
 |------|------|--------|------|
 | `--dry-run` | 无 | `False` | 无界面模式，仅校验入口可正常加载（不创建窗口） |
 
-> 旧版 `--mode` / `--gui` / `--nrows` / `--chunksize` 等 CLI 参数已随 CLI 模块归档到 `references/cli/`，主入口不再支持。
+> 旧版 `--mode` / `--gui` / `--nrows` / `--chunksize` 等 CLI 参数已随 CLI 模块归档（当前仓库未保留归档目录），主入口不再支持。
 
 ---
 
@@ -119,6 +125,7 @@ FTPA/
 │       │   │   ├── field_resolver.py   # 字段解析器
 │       │   │   └── protocols.py        # 窄接口 Protocol
 │       │   ├── panel_plot.py     #   交互绘图画布外观（PlotCanvasWidget）
+│       │   ├── panel_preview.py  #   右下角参数曲线预览区
 │       │   ├── panel_batch.py    #   批量处理面板
 │       │   ├── panel_export.py   #   导出面板
 │       │   ├── panel_log.py      #   日志面板
@@ -133,6 +140,7 @@ FTPA/
 │       │   ├── _downsampler.py   #   向量化 min-max 降采样
 │       │   ├── _font_config.py   #   Matplotlib CJK 字体配置
 │       │   ├── widgets.py        #   自定义控件（参数树、穿越控制）
+│       │   ├── parameter_picker.py # 搜索式参数选择对话框（右键添加参数）
 │       │   ├── worker.py         #   后台线程（DataLoaderWorker + AnalysisWorker）
 │       │   └── log_handler.py    #   logging → GUI 日志桥接
 │       ├── data/                 # 数据加载子包
@@ -141,7 +149,8 @@ FTPA/
 │       │   ├── io.py             #   通用文件读取（含 ZIP Slip 防护）
 │       │   ├── cache.py          #   文件缓存（LRU + mtime 失效）
 │       │   ├── batch.py          #   批处理（batch_process_files 等3个函数）
-│       │   ├── label_map.py      #   标签映射（LabelMap）
+│       │   ├── label_map.py      #   标签映射（LabelMap，支持静态映射 + Excel 覆盖）
+│       │   ├── parameter_map.py  #   由 data/参数名.xlsx 生成的静态参数映射
 │       │   ├── exporter.py       #   数据导出
 │       │   ├── column_config.py  #   列配置（CSV 列定义）
 │       │   ├── summary.py        #   数据摘要（generate/print_data_summary）
@@ -160,6 +169,7 @@ FTPA/
 │       │   ├── interface.py      #   分析接口定义
 │       │   ├── plugin_manager.py #   插件管理器
 │       │   ├── utils.py          #   分析工具函数
+│       │   ├── interval_analysis.py # 区间分析操作注册表（积分/极值/平均值等）
 │       │   ├── engines/          #   发动机分析子系统（*_analysis.py + *_report_generator.py）
 │       │   ├── fuel/             #   燃油分析子系统
 │       │   ├── power/            #   动力分析子系统
@@ -184,37 +194,26 @@ FTPA/
 │   ├── test_config.py            # 配置测试
 │   ├── test_cache.py             # 缓存测试
 │   ├── test_csv_loader.py        # CSV 加载测试
+│   ├── test_csv_loader_filter.py # CSV 时间列过滤测试
 │   ├── test_plot_renderer.py     # 渲染器测试
 │   ├── test_region_ctrl.py       # 区域控制器测试
 │   ├── test_event_detection.py   # 事件检测测试
+│   ├── test_review_fixes.py      # 代码审阅修复回归测试
 │   ├── bench_load.py             # 加载性能基准
 │   ├── bench_real.py             # 真实数据基准
 │   └── bench_scroll_zoom.py      # 滚动缩放基准
 │
-├── references/                   # 参考代码
-│   ├── cli/                      #   归档的 CLI 模块（pipeline / plotting / batch_processor / 旧 main）
-│   ├── matlab/                   #   MATLAB 原始实现
-│   │   ├── Param/                #     参数提取（5个文件）
-│   │   ├── PrivateComputing/     #     计算函数（2个文件）
-│   │   ├── PrivateStatistics/    #     统计函数（6个文件）
-│   │   └── PlotFigure/           #     绘图函数（9个文件）
-│   └── flight_parameter/         #   参考项目（CSV 加载 + 分析框架）
+├── data/                         # 数据文件目录（当前含参数名.xlsx 与示例 TXT）
 │
-├── testdata/                     # 测试数据文件（git 管理）
-├── data/                         # 数据文件目录
-│   ├── raw/                      # 原始数据
-│   ├── processed/                # 处理后的数据
-│   └── results/                  # 分析结果
+├── scripts/                      # 辅助脚本
+│   └── generate_parameter_map.py # 根据 data/参数名.xlsx 生成静态参数映射
 │
-├── logs/                         # 日志文件目录
-├── examples/                     # 示例代码目录
-├── docs/                         # 文档目录
-│
+├── FTPA_GUI.bat                  # Windows 桌面双击启动脚本（直接运行 GUI）
 ├── pyproject.toml                # Python 项目配置
 ├── requirements.txt              # 依赖清单（带兼容性上限）
 ├── ftpa_config.toml              # 项目级 TOML 配置（可选）
 ├── README.md                     # 项目说明（本文件）
-├── CLAUDE.md                     # AI 辅助开发指南
+├── AGENTS.md                     # AI 辅助开发指南
 ├── CHANGELOG.md                  # 变更日志
 └── .gitignore                    # Git 忽略规则
 ```
@@ -255,12 +254,12 @@ gui/ (PySide6 交互界面 + matplotlib 渲染)
 - `csv_loader.py` — `csv_param_extract()`: CSV 格式数据加载，自动编码检测（chardet），列配置驱动处理
 - `io.py` — `read_data_file()`: 通用文件读取（支持 dtype 预声明跳过类型推断）；`resolve_zip_file()`: ZIP 自动解压（含 Zip Slip 路径遍历校验）
 - `cache.py` — `FileCache`: OrderedDict LRU 缓存 + mtime 失效策略
-- `label_map.py` — `LabelMap`: 参数名称↔中文标签双向映射（从 Excel 加载，仅 TXT 需要）
+- `label_map.py` — `LabelMap`: 参数名称↔中文标签双向映射（静态映射 `parameter_map.py` 为默认，Excel 存在时覆盖/补充；含单位与重复标签对照）
   - `get_label()` / `get_var_name()` / `add()`: 标签查询与动态扩展
 - `batch.py` — `batch_process_files()` / `batch_analyze_statistics()` / `batch_export_summaries()`: 批量处理（从 `batch_processor.py` 迁入）
 - `summary.py` — `generate_data_summary()` / `print_data_summary()`: 数据摘要（从 `statistics/multi.py` 迁入，消除循环依赖）
 - `enrichment.py` — `add_weight_cg_to_data()`: 数据富化（从 `computing/weight_cg.py` 迁入，修复跨层依赖）
-- `exporter.py` — `export_data()` / `export_statistics()`: 数据导出
+- `exporter.py` — `export_data()` / `export_statistics()`: 数据导出（支持 CSV / Parquet / HDF5 / Excel / JSON，JSON 可选 gzip 压缩）
 - `column_config.py` — `get_replacement_rules()` / `apply_replacement_rules()`: CSV 列配置
 
 ### 2. 计算层 (computing/)
@@ -298,7 +297,7 @@ gui/ (PySide6 交互界面 + matplotlib 渲染)
 **职责**: PySide6 交互式图形界面
 
 - `app.py` — GUI 应用入口（`main(dry_run=False)`，安装 GUI 日志桥接）
-- `main_window.py` — 主窗口：菜单栏、穿越控制面板（阈值/模式/应用/重置）、信息显示
+- `main_window.py` — 主窗口：菜单栏、穿越控制面板（阈值/模式/应用/重置）、区间分析模块、信息显示
 - `services.py` — 32 行纯重导出文件，仅保留 `from ._data_context import DataContext, ...`，确保外部 `from .services import DataContext` 仍可用
 - `_data_context/` — **DataContext Facade 子包**（原 582 行 God Object 已拆分）：
   - `data_context.py` — 240 行 Facade 协调者，持有数据与子服务，仅负责生命周期管理与请求分发
@@ -312,14 +311,16 @@ gui/ (PySide6 交互界面 + matplotlib 渲染)
   - 7 个遗留可变属性（`data` / `time_sec` / `time_vec` / `lm` / `data_path` / `excel_path` / `source_type`）已标记 `@deprecated`，推荐改用 `ctx.query.*` 方法
 - `panel_plot.py` — `PlotCanvasWidget`: 交互绘图画布外观容器，委托给 **5 个控制器**：
   - `_layout_ctrl.py` — `LayoutController`: 布局模式切换（1×1/4×1/2×2）、子图选择
-  - `_plot_renderer.py` — `PlotRenderer`: 数据绘制、信号添加/移除、右键菜单
+  - `_plot_renderer.py` — `PlotRenderer`: 数据绘制、信号添加/移除、右键菜单、X 轴自适应到有数据的时间范围
   - `_crossing_analyzer.py` — `CrossingAnalyzer`: 穿越线绘制、缩放应用/重置、Y轴自动适配、统计更新
   - `_pan_ctrl.py` — `PanController`: 左键拖拽水平平移画布（5 像素阈值区分点击/拖拽）
   - `_region_ctrl.py` — `RegionController`: 右键拖动框选时间区间（半透明覆盖层 + 时间标注）
 - `_drop_ctrl.py` — `TreeDragHelper` + `CanvasDropFilter`: 参数树拖拽到子图的拖放控制器
+- `panel_preview.py` — `PreviewPanel`: 右下角曲线预览区，点选右侧参数时刷新显示对应数据曲线（精简显示，仅曲线本身）
 - `_downsampler.py` — `min_max_downsample()`: 向量化 min-max 降采样（np.reshape + nanmin/nanmax，500K 点 <1ms）
 - `_font_config.py` — `configure_display_font()`: Matplotlib CJK 字体配置（线程安全，从 `plotting.py` 提取）
-- `widgets.py` — `ParameterTreeWidget`: 参数树面板；`CrossingCtrl`: 穿越控制组件
+- `widgets.py` — `ParameterTreeWidget`: 参数树面板（完整参数库 + 不可用参数置灰）；`CrossingCtrl`: 穿越控制组件
+- `parameter_picker.py` — `ParameterPickerDialog`: 搜索式参数选择对话框（右键“添加参数...”使用，避免大菜单占屏）
 - `worker.py` — 后台线程：
   - `DataLoaderWorker`: 数据加载 QThread
   - `AnalysisWorker`: 系统分析后台线程（执行 `SystemAnalyzer.analyze()` + `generate_reports()`，防 GUI 冻结）
@@ -528,4 +529,4 @@ git checkout v1.0.0
 ---
 
 *此文件为项目主文档。*
-*最后更新：2026-08-01 | 版本：1.0.1*
+*最后更新：2026-08-10 | 版本：1.0.1（下一版本变更见 CHANGELOG）*

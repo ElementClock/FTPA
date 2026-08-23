@@ -73,6 +73,40 @@ class TestExporter:
         output_path = str(tmp_path / 'test_output')
         with pytest.raises(ValueError, match="不支持的导出格式"):
             export_data(data, output_path, output_format='invalid')
+
+    def test_export_data_json(self, tmp_path):
+        """测试导出 JSON 格式"""
+        data = {
+            'TIME': np.array([np.timedelta64(0, 's'), np.timedelta64(1, 's')]),
+            'signal1': np.array([1.0, 2.0])
+        }
+
+        output_path = str(tmp_path / 'test_output')
+        result_path = export_data(data, output_path, output_format='json')
+
+        assert os.path.exists(result_path)
+        assert result_path.endswith('.json')
+        with open(result_path, encoding='utf-8') as f:
+            content = f.read()
+        assert '"signal1"' in content
+
+    def test_export_data_json_gzip(self, tmp_path):
+        """测试导出 JSON 格式 + gzip 压缩"""
+        import gzip
+
+        data = {
+            'TIME': np.array([np.timedelta64(0, 's'), np.timedelta64(1, 's')]),
+            'signal1': np.array([1.0, 2.0])
+        }
+
+        output_path = str(tmp_path / 'test_output')
+        result_path = export_data(data, output_path, output_format='json', compression='gzip')
+
+        assert os.path.exists(result_path)
+        assert result_path.endswith('.json.gz')
+        with gzip.open(result_path, 'rt', encoding='utf-8') as f:
+            content = f.read()
+        assert '"signal1"' in content
     
     def test_generate_data_summary(self):
         """测试生成数据摘要"""

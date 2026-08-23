@@ -122,11 +122,12 @@ class EngineAnalysis(AnalysisInterface):
 
 
 def _find_columns(df: pd.DataFrame, patterns: list[str]) -> list[str]:
-    """按关键字查找匹配的列名。"""
+    """按关键字查找匹配的列名，并保持首次出现顺序去重。"""
     found = []
     for pattern in patterns:
         for col in df.columns:
             if pattern in str(col):
-                found.append(col)
+                if col not in found:
+                    found.append(col)
                 break
     return found

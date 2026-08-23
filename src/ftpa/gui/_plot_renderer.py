@@ -28,6 +28,7 @@ from PySide6.QtWidgets import QMenu, QMessageBox
 from ..utils.time_utils import format_time_seconds
 from ._layout_ctrl import LayoutController
 from ._downsampler import min_max_downsample
+from .parameter_picker import ParameterPickerDialog
 from ..config import CONFIG
 
 if TYPE_CHECKING:
@@ -63,6 +64,41 @@ class PlotRenderer:
         """清除 Line2D 缓存（布局切换/axes 重建时调用）。"""
         self._line_cache.clear()
         self._empty_text_cache.clear()
+
+    def get_reference_xlim(self) -> tuple[float, float] | None:
+        """返回用于同步所有子图 X 轴的参考时间范围。
+
+        优先级：
+        1. 第一个有数据的子图当前 xlim（保留用户缩放/平移）；
+        2. 数据上下文的时间范围（无子图有数据时）；
+        3. axes[0] 当前 xlim（兜底）。
+        """
+        w = self._widget
+
+        # 优先使用第一个有数据的子图
+        for i, ax in enumerate(w.axes):
+            if w.subplot_fields.get(i):
+                try:
+                    xlim = ax.get_xlim()
+                    return float(xlim[0]), float(xlim[1])
+                except Exception:
+                    logger.debug("子图 %d xlim 获取失败，跳过", i, exc_info=True)
+
+        # 没有子图有数据时，使用数据时间范围
+        if w.ctx is not None:
+            time_sec = w.ctx.query.get_time_sec()
+            if time_sec is not None and len(time_sec) > 0:
+                return float(time_sec[0]), float(time_sec[-1])
+
+        # 兜底
+        if w.axes:
+            try:
+                xlim = w.axes[0].get_xlim()
+                return float(xlim[0]), float(xlim[1])
+            except Exception:
+                logger.debug("axes[0] xlim 获取失败", exc_info=True)
+
+        return None
 
     # ── 数据绘制 ──
 
@@ -205,11 +241,11 @@ class PlotRenderer:
         # 7. 通用装饰
         self._apply_axis_decorations()
 
-        # 8. 同步所有子图 X 轴范围：以 axes[0] 为基准
+        # 8. 同步所有子图 X 轴范围：优先以有数据的子图为基准
         #    防止增量更新中新建 Line2D（ax.plot()）触发自动缩放导致 xlim 解耦
-        if w.axes:
-            ref_xlim = w.axes[0].get_xlim()
-            for ax in w.axes[1:]:
+        ref_xlim = self.get_reference_xlim()
+        if ref_xlim is not None:
+            for ax in w.axes:
                 ax.set_xlim(ref_xlim)
 
         w._layout.apply_spine_color()
@@ -233,10 +269,10 @@ class PlotRenderer:
         self._apply_axis_decorations()
         w._layout.apply_spine_color()
 
-        # 全量重建后同步所有子图 X 轴范围
-        if w.axes:
-            ref_xlim = w.axes[0].get_xlim()
-            for ax in w.axes[1:]:
+        # 全量重建后同步所有子图 X 轴范围：优先以有数据的子图为基准
+        ref_xlim = self.get_reference_xlim()
+        if ref_xlim is not None:
+            for ax in w.axes:
                 ax.set_xlim(ref_xlim)
 
         w.figure.tight_layout()
@@ -472,8 +508,22 @@ class PlotRenderer:
             act_clear.triggered.connect(lambda: self._clear_subplot(idx))
             menu.addAction(act_clear)
 
+            act_add = QAction("添加参数...", w)
+            act_add.triggered.connect(lambda: self._open_parameter_picker(idx))
+            menu.addAction(act_add)
+
         widget_pos = w.canvas.mapFromGlobal(w.cursor().pos())
         menu.exec(w.canvas.mapToGlobal(widget_pos))
+
+    def _open_parameter_picker(self, idx: int) -> None:
+        """右键“添加参数...”：打开搜索式参数选择对话框。"""
+        w = self._widget
+        if w.ctx is None:
+            return
+        field_labels, available_fields = w.ctx.get_all_field_labels_with_units()
+        dialog = ParameterPickerDialog(w, field_labels, available_fields)
+        if dialog.exec() and dialog.selected_field():
+            self._add_to_subplot(idx, dialog.selected_field())
 
     def _switch_layout_from_menu(self, mode: str) -> None:
         """右键菜单：切换布局模式。"""
@@ -530,6 +580,15 @@ class PlotRenderer:
         w = self._widget
         w.ctx = ctx
         self.rebuild_plot()
+
+        # 初始将 X 轴设为数据实际时间范围，避免空子图停留在 0~1
+        if w.ctx is not None:
+            time_sec = w.ctx.query.get_time_sec()
+            if time_sec is not None and len(time_sec) > 0:
+                data_xlim = (float(time_sec[0]), float(time_sec[-1]))
+                for ax in w.axes:
+                    ax.set_xlim(*data_xlim)
+
         # 记录初始时间范围（供 reset_zoom 恢复）
         w._crossing.save_initial_time_range()
         w._crossing.update_stats()

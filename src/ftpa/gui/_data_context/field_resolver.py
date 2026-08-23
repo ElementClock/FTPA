@@ -8,6 +8,7 @@ from __future__ import annotations
 import logging
 
 from ...data.label_map import LabelMap
+from ...data.parameter_map import PARAMETER_LABELS, PARAMETER_UNITS
 from ...utils.strings import column_to_field_name
 
 logger = logging.getLogger(__name__)
@@ -66,6 +67,36 @@ class FieldResolver:
     def get_label(self, field_name: str) -> str:
         """获取单个字段的中文标签。"""
         return self.get_field_labels().get(field_name, field_name)
+
+    def get_field_labels_with_units(self) -> dict[str, str]:
+        """字段名 -> 带单位的中文标签（用于 GUI 参数树显示）。
+
+        例如：``高度_G1 (m)``；无单位时只返回中文标签。
+        """
+        result: dict[str, str] = {}
+        for field, label in self.get_field_labels().items():
+            unit = self._lm.get_unit(field) if self._lm is not None else None
+            result[field] = f"{label} ({unit})" if unit else label
+        return result
+
+    def get_all_field_labels_with_units(self) -> tuple[dict[str, str], set[str]]:
+        """返回完整参数库标签和当前数据可用字段。
+
+        返回值：
+            (all_labels, available_fields)
+            - all_labels: 静态参数库 + 当前数据字段的“字段名 -> 带单位标签”
+            - available_fields: 当前数据中实际存在的字段名集合
+        """
+        available_fields = set(self.get_field_names())
+        result = self.get_field_labels_with_units()
+
+        for field, label in PARAMETER_LABELS.items():
+            if field in result:
+                continue
+            unit = PARAMETER_UNITS.get(field)
+            result[field] = f"{label} ({unit})" if unit else label
+
+        return result, available_fields
 
     def resolve_field(self, signal_id: str) -> str | None:
         """将中文标签或字段名解析为 data 中的字段名。"""

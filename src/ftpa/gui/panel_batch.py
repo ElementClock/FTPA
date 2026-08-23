@@ -7,7 +7,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from PySide6.QtCore import QThread, Signal
+from PySide6.QtCore import QObject, QThread, Signal
 from PySide6.QtWidgets import (
     QComboBox,
     QFileDialog,
@@ -167,13 +167,13 @@ class BatchPanel(QWidget):
             self.result_table.setItem(row, 4, QTableWidgetItem(note))
 
 
-class _BatchWorker(QThread):
-    """批量操作后台工作者。"""
+class _BatchWorker(QObject):
+    """批量操作后台工作者（普通 QObject，配合 QThread.moveToThread 使用）。"""
     progress = Signal(int)
     finished = Signal(list)
 
-    def __init__(self, mode, pattern, output, fmt, excel_path):
-        super().__init__()
+    def __init__(self, mode, pattern, output, fmt, excel_path, parent=None):
+        super().__init__(parent)
         self.mode = mode
         self.pattern = pattern
         self.output = output

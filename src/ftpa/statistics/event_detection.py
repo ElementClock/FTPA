@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 import numpy as np
-from ..utils.time_utils import time_to_seconds_array, parse_time_to_seconds
+from ..utils.time_utils import parse_time_to_seconds, select_time_window, time_to_seconds_array
 from ..data.label_map import LabelMap
 
 
@@ -32,11 +32,24 @@ def compute_takeoff_landing_stats(
         stats_str: 统计结果字符串
     """
     t_vec = data['TIME']
-    t_vec_sec = time_to_seconds_array(t_vec)
-    t_start_sec = parse_time_to_seconds(t_start)
-    t_end_sec = parse_time_to_seconds(t_end)
+    if len(t_vec) == 0:
+        return '（窗口内无数据）'
 
-    idx = np.where((t_vec_sec >= t_start_sec) & (t_vec_sec <= t_end_sec))[0]
+    # 保留原有“窗口完全超出数据范围/起止倒置时返回无数据”的语义；
+    # 仅 None / 空字符串表示全时段。
+    t_vec_sec = time_to_seconds_array(t_vec)
+    t_start_sec = parse_time_to_seconds(t_start) if t_start is not None and t_start != "" else None
+    t_end_sec = parse_time_to_seconds(t_end) if t_end is not None and t_end != "" else None
+
+    if t_start_sec is not None and t_end_sec is not None and t_start_sec > t_end_sec:
+        return '（窗口内无数据）'
+    if t_start_sec is not None and t_start_sec > t_vec_sec[-1]:
+        return '（窗口内无数据）'
+    if t_end_sec is not None and t_end_sec < t_vec_sec[0]:
+        return '（窗口内无数据）'
+
+    i_start, i_end, _, _ = select_time_window(t_vec, t_start, t_end)
+    idx = np.arange(i_start, i_end + 1)
     if len(idx) == 0:
         return '（窗口内无数据）'
 
