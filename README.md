@@ -2,7 +2,7 @@
 
 FTPA (Flight Test Performance Analysis) 是一个用于分析飞机性能操稳试飞数据的 Python 工具包，支持 TXT（Tab 分隔）和 CSV 两种飞参数据格式，提供 PySide6 GUI 交互界面（外加 `--dry-run` 无界面验证入口）。
 
-> CLI 分析模式（verify/chunked/analysis/stats/interactive）已归档（当前仓库未保留归档目录），不再由 `src/ftpa/main.py` 提供。
+> CLI 分析模式（verify/chunked/analysis/stats/interactive）已归档到本地未跟踪的 `references/cli/` 目录（不随仓库分发），不再由 `src/ftpa/main.py` 提供。
 
 ---
 
@@ -70,7 +70,7 @@ python -m ftpa.main --dry-run
 |------|------|--------|------|
 | `--dry-run` | 无 | `False` | 无界面模式，仅校验入口可正常加载（不创建窗口） |
 
-> 旧版 `--mode` / `--gui` / `--nrows` / `--chunksize` 等 CLI 参数已随 CLI 模块归档（当前仓库未保留归档目录），主入口不再支持。
+> 旧版 `--mode` / `--gui` / `--nrows` / `--chunksize` 等 CLI 参数已随 CLI 模块归档（归档位于本地未跟踪的 `references/cli/`），主入口不再支持。
 
 ---
 
@@ -149,7 +149,7 @@ FTPA/
 │       │   ├── cache.py          #   文件缓存（LRU + mtime 失效）
 │       │   ├── batch.py          #   批处理（batch_process_files 等3个函数）
 │       │   ├── label_map.py      #   标签映射（LabelMap，支持静态映射 + Excel 覆盖）
-│       │   ├── parameter_map.py  #   由 data/参数名.xlsx 生成的静态参数映射
+│       │   ├── parameter_map.py  #   由 参数名.xlsx 生成的静态参数映射
 │       │   ├── exporter.py       #   数据导出
 │       │   ├── column_config.py  #   列配置（CSV 列定义）
 │       │   ├── summary.py        #   数据摘要（generate/print_data_summary）
@@ -180,7 +180,7 @@ FTPA/
 │           ├── time_utils.py     #   时间工具
 │           └── log_utils.py      #   纯 Python 日志配置（零 Qt 依赖）
 │
-├── tests/                        # 测试目录
+├── tests/                        # 测试目录（pytest 自动收集 test_*.py）
 │   ├── test_unit.py              # 单元测试
 │   ├── test_modules.py           # 模块测试
 │   ├── test_comprehensive.py     # 综合测试
@@ -197,23 +197,31 @@ FTPA/
 │   ├── test_plot_renderer.py     # 渲染器测试
 │   ├── test_region_ctrl.py       # 区域控制器测试
 │   ├── test_event_detection.py   # 事件检测测试
-│   ├── test_review_fixes.py      # 代码审阅修复回归测试
-│   ├── bench_load.py             # 加载性能基准
-│   ├── bench_real.py             # 真实数据基准
-│   └── bench_scroll_zoom.py      # 滚动缩放基准
+│   ├── test_scroll_zoom.py       # 滚轮缩放协调/性能测试
+│   ├── test_interval_analysis.py # 区间分析测试
+│   ├── test_preview_panel.py     # 曲线预览面板测试
+│   ├── test_parameter_map.py     # 静态参数映射测试
+│   └── test_review_fixes.py      # 代码审阅修复回归测试
 │
-├── data/                         # 数据文件目录（当前含参数名.xlsx 与示例 TXT）
+├── testdata/                     # 样例数据目录（git 忽略，本地放置）
+│   ├── FTPD-AG600-...-32.txt     # TXT 格式飞参数据样例
+│   └── 参数名.xlsx               # 字段名↔中文标签映射表
 │
 ├── scripts/                      # 辅助脚本
-│   └── generate_parameter_map.py # 根据 data/参数名.xlsx 生成静态参数映射
+│   ├── generate_parameter_map.py # 根据 参数名.xlsx 生成静态参数映射
+│   └── benchmarks/               # 手动运行的性能基准脚本（非 pytest 收集）
+│       ├── bench_load.py         # 合成数据加载基准
+│       └── bench_real.py         # 真实数据文件基准（读取 testdata/）
+│
+├── references/                   # 本地归档（git 忽略）：cli/ MATLAB 参考实现等历史代码
+│
+├── build/ build_single/ dist/    # PyInstaller 构建产物（git 忽略）
 │
 ├── FTPA_GUI.bat                  # Windows 桌面双击启动脚本（直接运行 GUI）
 ├── pyproject.toml                # Python 项目配置
 ├── requirements.txt              # 依赖清单（带兼容性上限）
 ├── ftpa_config.toml              # 项目级 TOML 配置（可选）
 ├── README.md                     # 项目说明（本文件）
-├── AGENTS.md                     # AI 辅助开发指南
-├── CHANGELOG.md                  # 变更日志
 └── .gitignore                    # Git 忽略规则
 ```
 
@@ -527,4 +535,4 @@ git checkout v1.0.0
 ---
 
 *此文件为项目主文档。*
-*最后更新：2026-08-10 | 版本：1.0.1（下一版本变更见 CHANGELOG）*
+*最后更新：2026-08-23 | 版本：1.0.1*
