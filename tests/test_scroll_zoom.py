@@ -44,7 +44,7 @@ class TestScrollZoomPerformance:
         ax.get_xlim.return_value = (0.0, 1000.0)
         widget.axes = [ax]
         ctx = MagicMock()
-        ctx.time_sec = time_sec
+        ctx.query.get_time_sec.return_value = time_sec
         widget.ctx = ctx
 
         analyzer = CrossingAnalyzer(widget)
@@ -70,7 +70,7 @@ class TestScrollZoomPerformance:
         ax.get_xlim.return_value = (0.0, 1000.0)
         widget.axes = [ax]
         ctx = MagicMock()
-        ctx.time_sec = time_sec
+        ctx.query.get_time_sec.return_value = time_sec
         widget.ctx = ctx
 
         analyzer = CrossingAnalyzer(widget)
@@ -113,8 +113,8 @@ class TestUpdateStatsPerformance:
         widget.subplot_fields = {0: ["sig1"]}
 
         ctx = MagicMock()
-        ctx.time_sec = time_sec
-        ctx.data = {"sig1": sig_data}
+        ctx.query.get_time_sec.return_value = time_sec
+        ctx.query.get_signal_data.return_value = sig_data
         ctx.get_label = lambda f: f
         widget.ctx = ctx
 
@@ -140,7 +140,7 @@ class TestScrollZoomCoordination:
         ax.get_xlim.return_value = (0.0, 100.0)
         widget.axes = [ax]
         ctx = MagicMock()
-        ctx.time_sec = np.array([0.0, 50.0, 100.0])
+        ctx.query.get_time_sec.return_value = np.array([0.0, 50.0, 100.0])
         widget.ctx = ctx
 
         analyzer = CrossingAnalyzer(widget)
@@ -157,7 +157,7 @@ class TestScrollZoomCoordination:
         ax.get_xlim.return_value = (0.0, 100.0)
         widget.axes = [ax]
         ctx = MagicMock()
-        ctx.time_sec = None
+        ctx.query.get_time_sec.return_value = None
         widget.ctx = ctx
 
         analyzer = CrossingAnalyzer(widget)
@@ -174,7 +174,7 @@ class TestScrollZoomCoordination:
         ax.get_xlim.return_value = (0.0, 100.0)
         widget.axes = [ax]
         ctx = MagicMock()
-        ctx.time_sec = np.array([0.0, 100.0])
+        ctx.query.get_time_sec.return_value = np.array([0.0, 100.0])
         widget.ctx = ctx
 
         analyzer = CrossingAnalyzer(widget)
@@ -207,7 +207,7 @@ class TestScrollZoomCoordination:
         ax.get_xlim.return_value = (0.0, 100.0)
         widget.axes = [ax]
         ctx = MagicMock()
-        ctx.time_sec = np.array([0.0, 100.0])
+        ctx.query.get_time_sec.return_value = np.array([0.0, 100.0])
         widget.ctx = ctx
 
         analyzer = CrossingAnalyzer(widget)
