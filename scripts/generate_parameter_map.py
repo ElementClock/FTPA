@@ -1,14 +1,16 @@
-"""根据 参数名.xlsx 生成 src/ftpa/data/parameter_map.py。
+"""根据 参数名.xlsx 生成 src/ftpa/data/参数名.csv（参数映射的唯一输入）。
 
-生成内容：
-- PARAMETER_LABELS: 原始名称/字段名 -> 中文显示名（重复标签自动加编号后缀）
-- PARAMETER_UNITS: 原始名称/字段名 -> 单位（无单位时为 None）
-- DISPLAY_LABEL_TO_FIELDS: 中文显示名 -> 字段名列表
-- ORIGINAL_LABEL_TO_FIELDS: Excel 原始中文标签 -> 字段名列表（跨数据源对照表）
-- DUPLICATE_LABELS: 原始中文标签 -> 编号后的显示名列表（重复标签对照表）
+输入：厂商 参数名.xlsx（第 1 列=原始名称，第 2 列=中文名称，可选第 3 列=单位；可带表头）
+输出：src/ftpa/data/参数名.csv（UTF-8+BOM，表头 `原始名称,中文名称,单位`）
 
-输入文件按序在以下位置查找，取第一个存在的：
-    data/参数名.xlsx → testdata/参数名.xlsx → src/ftpa/data/参数名.xlsx
+单位列规则（按优先级）：
+1. xlsx 自带第 3 列 → 直接使用
+2. 已存在 参数名.csv → 按字段名结转已有单位（避免重新生成时丢失手工维护的单位）
+3. 都没有 → 空
+
+定位：本脚本为 xlsx→csv 合并桥。供应商仍以 xlsx 交付时重跑本脚本即可：
+- 厂商 xlsx 行的原始名称/中文标签为权威（按字段名覆盖），单位列按 xlsx 自带 / 结转 / 空。
+- 已存在 参数名.csv 中 xlsx 没有的行（手工维护或脚本补录）保持不变，避免丢失。
 
 用法：
     python scripts/generate_parameter_map.py
@@ -16,7 +18,6 @@
 
 from __future__ import annotations
 
-from collections import Counter, defaultdict
 from pathlib import Path
 
 import pandas as pd
@@ -27,7 +28,8 @@ EXCEL_CANDIDATE_DIRS = [
     PROJECT_ROOT / "testdata",
     PROJECT_ROOT / "src" / "ftpa" / "data",
 ]
-OUTPUT_PATH = PROJECT_ROOT / "src" / "ftpa" / "data" / "parameter_map.py"
+OUTPUT_PATH = PROJECT_ROOT / "src" / "ftpa" / "data" / "参数名.csv"
+CSV_HEADER = ["原始名称", "中文名称", "单位"]
 
 
 def _resolve_excel_path() -> Path:
@@ -40,91 +42,74 @@ def _resolve_excel_path() -> Path:
     raise FileNotFoundError(f"未找到 参数名.xlsx，已搜索以下位置：\n  {searched}")
 
 
-def _clean(value: object) -> str | None:
-    if value is None:
-        return None
-    text = str(value).strip()
-    if not text or text.lower() == "nan":
-        return None
-    return text
+def _canonical_field(orig: str) -> str:
+    """原始名称归一化为字段名（- → _，保留字母/数字/下划线），用于跨文件单位结转。"""
+    cleaned = "".join(c if c.isalnum() or c == "_" else "_" for c in orig.replace("-", "_"))
+    if cleaned and cleaned[0].isdigit():
+        cleaned = "x" + cleaned
+    return cleaned
 
 
-def generate() -> str:
-    df = pd.read_excel(_resolve_excel_path())
+def _load_existing_units() -> dict[str, str]:
+    """从已存在的 参数名.csv 读取「字段名 → 非空单位」，供重新生成时结转。"""
+    units: dict[str, str] = {}
+    for orig, _, unit in _read_existing_rows():
+        if unit and unit.lower() not in ("nan", "none"):
+            units[_canonical_field(orig)] = unit
+    return units
+
+
+def _read_existing_rows() -> list[tuple[str, str, str]]:
+    """读取已存在 参数名.csv 的全部行（原始名称, 中文名称, 单位）。"""
+    if not OUTPUT_PATH.is_file():
+        return []
+    existing = pd.read_csv(OUTPUT_PATH, encoding="utf-8-sig", dtype=str)
+    rows: list[tuple[str, str, str]] = []
+    for i in range(len(existing)):
+        orig = str(existing.iloc[i, 0]).strip()
+        label = str(existing.iloc[i, 1]).strip()
+        unit = str(existing.iloc[i, 2]).strip() if existing.shape[1] >= 3 and pd.notna(existing.iloc[i, 2]) else ""
+        if not orig or orig.lower() == "nan":
+            continue
+        rows.append((orig, label, unit))
+    return rows
+
+
+def main() -> None:
+    df = pd.read_excel(_resolve_excel_path(), dtype=str)
     if df.shape[1] < 2:
         raise ValueError("Excel 至少需要两列：原始名称、中文名称")
 
-    raw_orig = df.iloc[:, 0].astype(str).str.strip().tolist()
-    raw_label = df.iloc[:, 1].astype(str).str.strip().tolist()
-    raw_unit = [_clean(v) for v in df.iloc[:, 2].tolist()] if df.shape[1] >= 3 else [None] * len(df)
+    existing_units = _load_existing_units()
+    existing_by_field = {_canonical_field(o): (o, l, u) for o, l, u in _read_existing_rows()}
 
-    rows: list[tuple[str, str, str | None]] = []
-    for orig, label, unit in zip(raw_orig, raw_label, raw_unit):
+    # 合并：厂商 xlsx 行为准（按字段名对比），已存在但 xlsx 没有的行保留，避免丢失手工维护
+    merged: dict[str, tuple[str, str, str]] = {}
+    for i in range(len(df)):
+        orig = str(df.iloc[i, 0]).strip()
+        label = str(df.iloc[i, 1]).strip()
         if not orig or orig.lower() == "nan":
             continue
         if not label or label.lower() == "nan":
             continue
-        rows.append((orig, label, unit))
 
-    label_counts = Counter(label for _, label, _ in rows)
-    seen: dict[str, int] = defaultdict(int)
+        # 单位：xlsx 自带第 3 列优先，否则结转已有，否则空
+        unit = ""
+        if df.shape[1] >= 3 and pd.notna(df.iloc[i, 2]):
+            unit = str(df.iloc[i, 2]).strip()
+        if not unit or unit.lower() in ("nan", "none"):
+            unit = existing_units.get(_canonical_field(orig), "")
 
-    parameter_labels: dict[str, str] = {}
-    parameter_units: dict[str, str | None] = {}
-    display_label_to_fields: dict[str, list[str]] = defaultdict(list)
-    original_label_to_fields: dict[str, list[str]] = defaultdict(list)
-    duplicate_labels: dict[str, list[str]] = defaultdict(list)
+        merged[_canonical_field(orig)] = (orig, label, unit)
 
-    for orig, label, unit in rows:
-        seen[label] += 1
-        if label_counts[label] > 1:
-            display_label = f"{label}_{seen[label]}"
-            duplicate_labels[label].append(display_label)
-        else:
-            display_label = label
+    for cf, (orig, label, unit) in existing_by_field.items():
+        if cf not in merged:
+            merged[cf] = (orig, label, unit)
 
-        parameter_labels[orig] = display_label
-        parameter_units[orig] = unit
-        display_label_to_fields[display_label].append(orig)
-        original_label_to_fields[label].append(orig)
-
-    lines = [
-        '"""',
-        "FTPA 参数映射静态数据。",
-        "",
-        "由 scripts/generate_parameter_map.py 根据 参数名.xlsx（按 data/testdata/src 回退查找）自动生成，",
-        "请勿手工编辑；如需更新请重新运行生成脚本。",
-        '"""',
-        "",
-        "from __future__ import annotations",
-        "",
-        "PARAMETER_LABELS: dict[str, str] = {",
-    ]
-    for orig in parameter_labels:
-        lines.append(f"    {orig!r}: {parameter_labels[orig]!r},")
-    lines.extend(["}", "", "PARAMETER_UNITS: dict[str, str | None] = {"])
-    for orig in parameter_units:
-        lines.append(f"    {orig!r}: {parameter_units[orig]!r},")
-    lines.extend(["}", "", "DISPLAY_LABEL_TO_FIELDS: dict[str, list[str]] = {"])
-    for label in sorted(display_label_to_fields):
-        fields = display_label_to_fields[label]
-        lines.append(f"    {label!r}: {fields!r},")
-    lines.extend(["}", "", "ORIGINAL_LABEL_TO_FIELDS: dict[str, list[str]] = {"])
-    for label in sorted(original_label_to_fields):
-        fields = original_label_to_fields[label]
-        lines.append(f"    {label!r}: {fields!r},")
-    lines.extend(["}", "", "DUPLICATE_LABELS: dict[str, list[str]] = {"])
-    for label in sorted(duplicate_labels):
-        lines.append(f"    {label!r}: {duplicate_labels[label]!r},")
-    lines.extend(["}", ""])
-
-    return "\n".join(lines)
-
-
-def main() -> None:
+    out_df = pd.DataFrame(sorted(merged.values(), key=lambda r: r[0]), columns=CSV_HEADER)
     OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
-    OUTPUT_PATH.write_text(generate(), encoding="utf-8")
-    print(f"已生成: {OUTPUT_PATH}")
+    out_df.to_csv(OUTPUT_PATH, index=False, encoding="utf-8-sig")
+    print(f"已生成: {OUTPUT_PATH}（合并后数据行数: {len(out_df)}）")
 
 
 if __name__ == "__main__":
