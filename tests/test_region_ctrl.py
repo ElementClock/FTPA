@@ -167,6 +167,46 @@ class TestRegionControllerStateMachine:
         assert was_drag is True
         assert ctrl.get_state() == RegionController.SELECTED
 
+    def test_release_after_drag_emits_region_range(self):
+        """框选完成后应通过 view_range_changed 发射区域坐标。"""
+        widget = _make_widget_mock()
+        ctrl = RegionController(widget)
+
+        press_event = _make_event(button=3, x=100, y=200, xdata=30.0, inaxes=widget.axes[0])
+        ctrl.on_press(press_event)
+        motion_event = _make_event(x=120, y=200, xdata=70.0, inaxes=widget.axes[0])
+        ctrl.on_motion(motion_event)
+        release_event = _make_event(button=3, x=120, y=200, xdata=70.0, inaxes=widget.axes[0])
+        ctrl.on_release(release_event)
+
+        widget.view_range_changed.emit.assert_called_once_with(30.0, 70.0)
+
+    def test_release_after_left_to_right_drag_emits_swapped_region(self):
+        """从右往左拖动（start>end）时发射规范化后（交换）的区域坐标。"""
+        widget = _make_widget_mock()
+        ctrl = RegionController(widget)
+
+        press_event = _make_event(button=3, x=100, y=200, xdata=70.0, inaxes=widget.axes[0])
+        ctrl.on_press(press_event)
+        motion_event = _make_event(x=120, y=200, xdata=30.0, inaxes=widget.axes[0])
+        ctrl.on_motion(motion_event)
+        release_event = _make_event(button=3, x=120, y=200, xdata=30.0, inaxes=widget.axes[0])
+        ctrl.on_release(release_event)
+
+        widget.view_range_changed.emit.assert_called_once_with(30.0, 70.0)
+
+    def test_single_click_no_emit(self):
+        """单击（非拖动）完成框选时不发射 view_range_changed。"""
+        widget = _make_widget_mock()
+        ctrl = RegionController(widget)
+
+        press_event = _make_event(button=3, x=100, y=200, xdata=30.0, inaxes=widget.axes[0])
+        ctrl.on_press(press_event)
+        release_event = _make_event(button=3, x=101, y=201, xdata=30.5, inaxes=widget.axes[0])
+        ctrl.on_release(release_event)
+
+        widget.view_range_changed.emit.assert_not_called()
+
     def test_release_without_drag_returns_false(self):
         """未拖动时释放应返回 False（表示单击）。"""
         widget = _make_widget_mock()

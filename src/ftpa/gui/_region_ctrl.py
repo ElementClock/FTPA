@@ -181,6 +181,10 @@ class RegionController:
                     f"{format_time_seconds(self._region_end)}  "
                     f"（点击「应用」按钮执行穿越检测）"
                 )
+                # 通知外部框选区域已生效（区间分析等以此优先于视图范围）
+                self._widget.view_range_changed.emit(
+                    float(self._region_start), float(self._region_end)
+                )
 
             # 重置按下事件
             self._press_event = None

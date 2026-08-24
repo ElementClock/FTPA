@@ -5,6 +5,8 @@
 
 from __future__ import annotations
 
+from unittest.mock import MagicMock
+
 import pytest
 from PySide6.QtCore import QSettings
 
@@ -68,3 +70,44 @@ def test_hidden_preview_skips_refresh(main_window):
     main_window.preview_panel.hide()
     main_window._on_param_selected_for_preview("sig")  # 面板隐藏 → 直接跳过
     assert calls == []
+
+
+# ── 区间分析时间区间标签同步（问题5）──
+
+
+def test_view_range_changed_updates_interval_label(main_window):
+    """窗口缩放/平移后区间标签应实时同步为当前视图范围。"""
+    ctx = MagicMock()
+    ctx.is_loaded = True
+    main_window.data_context = ctx
+    main_window.plot_widget.axes[0].set_xlim(100.0, 200.0)
+
+    main_window.plot_widget.view_range_changed.emit(100.0, 200.0)
+
+    assert main_window.analysis_interval_label.text() == \
+        "区间: 00:01:40.000 - 00:03:20.000"
+    assert "当前视图" not in main_window.analysis_interval_label.text()
+
+
+def test_view_range_changed_ignored_when_no_data(main_window):
+    """数据未加载时视图变化不修改区间标签。"""
+    main_window.analysis_interval_label.setText("区间: 当前视图")
+    main_window.data_context = None
+
+    main_window.plot_widget.view_range_changed.emit(100.0, 200.0)
+
+    assert "当前视图" in main_window.analysis_interval_label.text()
+
+
+def test_region_selection_takes_priority_over_view(main_window):
+    """有框选区域时区间标签显示区域范围（优先于视图 xlim）。"""
+    ctx = MagicMock()
+    ctx.is_loaded = True
+    main_window.data_context = ctx
+    main_window.plot_widget.has_region_selection = lambda: True
+    main_window.plot_widget.get_region_time_range = lambda: (30.0, 70.0)
+
+    main_window.plot_widget.view_range_changed.emit(100.0, 200.0)
+
+    text = main_window.analysis_interval_label.text()
+    assert "当前视图" not in text

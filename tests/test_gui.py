@@ -1303,6 +1303,27 @@ class TestCrossingAnalyzerUpdateStats:
         # 应仍有输出（含 sig1 行），即使值为 nan
         assert "sig1" in analyzer.last_stats_text
 
+    def test_update_stats_emits_view_range(self):
+        """视图变化（update_stats 汇聚点）应发射 view_range_changed 当前 xlim。"""
+        analyzer, widget = self._make_analyzer_with_stats(
+            n_axes=1,
+            time_sec=np.linspace(0, 100, 101),
+            xlim=(10.0, 30.0),
+        )
+
+        analyzer.update_stats()
+
+        widget.view_range_changed.emit.assert_called_once_with(10.0, 30.0)
+
+    def test_update_stats_no_ctx_no_emit(self):
+        """无数据上下文时 update_stats 早退，不发射 view_range_changed。"""
+        analyzer, widget = self._make_analyzer_with_stats(n_axes=1)
+        widget.ctx = None
+
+        analyzer.update_stats()
+
+        widget.view_range_changed.emit.assert_not_called()
+
 
 # ============================================================================
 # Y 轴自适应 — 缩放防抖回调测试

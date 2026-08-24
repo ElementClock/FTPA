@@ -118,6 +118,7 @@ class MainWindow(QMainWindow):
         self.plot_widget.subplot_selected.connect(self._on_subplot_selected)
         self.plot_widget.param_dropped.connect(self._on_subplot_fields_changed)
         self.plot_widget.subplot_fields_changed.connect(self._on_subplot_fields_changed)
+        self.plot_widget.view_range_changed.connect(self._on_view_range_changed)
 
         self.param_tree = ParameterTreeWidget()
         self.preview_panel = PreviewPanel()
@@ -450,6 +451,21 @@ class MainWindow(QMainWindow):
             return float(xlim[0]), float(xlim[1])
         return None
 
+    def _on_view_range_changed(self, t_start: float, t_end: float) -> None:
+        """视图范围/框选变化 → 同步区间分析的区间标签。
+
+        参数 t_start/t_end 仅供监听方与测试使用；标签口径以 _get_analysis_interval
+        为准（框选区域优先于视图 xlim）。
+        """
+        if self.data_context is None or not self.data_context.is_loaded:
+            return
+        interval = self._get_analysis_interval()
+        if interval is None:
+            return
+        self.analysis_interval_label.setText(
+            f"区间: {format_time_seconds(interval[0])} - {format_time_seconds(interval[1])}"
+        )
+
     def _on_run_interval_analysis(self) -> None:
         """执行区间分析并将结果追加到信息框（统一异常兜底）。"""
         self.status_bar.showMessage("区间分析执行中...")
@@ -502,9 +518,7 @@ class MainWindow(QMainWindow):
             operation,
         )
 
-        self.analysis_interval_label.setText(
-            f"区间: {format_time_seconds(t_start)} - {format_time_seconds(t_end)}"
-        )
+        # 区间标签已由 _on_view_range_changed 实时同步，此处不重复设置
         self._append_log(f"[区间分析] {label} {operation}: {result}")
 
     # ── 参数树操作 ──

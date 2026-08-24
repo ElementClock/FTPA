@@ -68,6 +68,8 @@ class PlotCanvasWidget(QWidget):
     param_dropped = Signal(str)       # 参数 field_name
     # 子图信号列表变化（添加/删除/清空）
     subplot_fields_changed = Signal()
+    # 当前生效时间范围变化（视图 xlim 或框选区域）
+    view_range_changed = Signal(float, float)
     # 日志消息
     log_message = Signal(str)
 

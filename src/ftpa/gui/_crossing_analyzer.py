@@ -559,6 +559,12 @@ class CrossingAnalyzer:
 
         self.last_stats_text = "\n".join(lines)
 
+        # 视图范围变化通知（供外部如区间分析标签同步；GUI 线程内直连，无重入）
+        try:
+            w.view_range_changed.emit(float(t_start), float(t_end))
+        except Exception:
+            logger.debug("view_range_changed 信号发送失败", exc_info=True)
+
     def get_stats_text(self) -> str:
         """获取当前统计文本（供外部信息显示框使用）。"""
         return self.last_stats_text
