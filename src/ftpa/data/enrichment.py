@@ -43,7 +43,10 @@ def add_weight_cg_to_data(data: dict[str, np.ndarray], lm: LabelMap) -> None:
             data['totalWeight'] = total_weight
             data['relCg'] = rel_cg
 
-            lm.add('totalWeight', '总重')
-            lm.add('relCg', '相对重心')
-    except Exception as e:
-        logger.warning("重量重心计算失败: %s", e)
+            # 幂等性：字段已存在时跳过 add，避免二次注入产生 '总重_2'（L4）
+            if 'totalWeight' not in lm.list_fields():
+                lm.add('totalWeight', '总重')
+            if 'relCg' not in lm.list_fields():
+                lm.add('relCg', '相对重心')
+    except (ValueError, TypeError, KeyError, ZeroDivisionError):
+        logger.warning("重量重心计算失败，跳过富化", exc_info=True)

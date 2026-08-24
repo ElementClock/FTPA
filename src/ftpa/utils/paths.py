@@ -3,30 +3,32 @@
 提供项目文件路径搜索和解析功能
 """
 
+import logging
 import os
 import sys
 from pathlib import Path
 from ..config import MAPPING_FILENAME  # P1-ARCH-2: 从顶层 config 导入，避免 utils 反向依赖 data
 
+logger = logging.getLogger(__name__)
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]  # src/ftpa/utils/ → 项目根目录
-DEFAULT_TXT_FILE = PROJECT_ROOT / "FTPD-AG600-007-QD-260509-G-1-飞机性能操稳-32.txt"
 
 
 def resolve_path(path_value: str | os.PathLike[str] | None, default_path: Path | None = None) -> str:
     """Resolve an input path relative to the project root when needed.
 
-    搜索优先级：
-      1. 如果 path_value 为 None，使用 default_path 或 DEFAULT_TXT_FILE
-      2. 绝对路径直接使用
-      3. 相对路径先按项目根目录解析，再按 CWD 解析
-      4. 兜底搜索 data/ 子目录中的数据文件
+    行为（M10 修订）：
+      - **用户传入具体路径**：依次按 ``绝对路径 → PROJECT_ROOT → CWD`` 解析；
+        路径不存在时记录 warning 并原样返回（由调用方报错），**不再偷换文件**。
+      - ``path_value is None`` 且提供 ``default_path``：直接使用默认文件，
+        存在才返回解析结果，否则原样返回并告警。
+      - ``path_value is None`` 且未提供 ``default_path``：在
+        ``testdata / data / data/raw / data/processed / 项目根`` 下惰性发现首个
+        数据文件（``*.txt``/``*.tsv``/``*.dat``），找不到返回空字符串。
     """
-    candidate = path_value
-    if candidate is None:
-        candidate = default_path or DEFAULT_TXT_FILE
-    else:
-        candidate = Path(candidate)
+    # 用户显式传入的路径
+    if path_value is not None:
+        candidate = Path(path_value)
         if not candidate.is_absolute():
             for base in (PROJECT_ROOT, Path.cwd()):
                 resolved = (base / candidate).resolve()
@@ -36,21 +38,34 @@ def resolve_path(path_value: str | os.PathLike[str] | None, default_path: Path |
         else:
             candidate = candidate.resolve()
 
-    if candidate.exists():
+        if candidate.exists():
+            return str(candidate)
+
+        logger.warning("resolve_path: 路径不存在，原样返回供调用方报错: %s", path_value)
+        return str(path_value)
+
+    # 显式请求默认文件
+    if default_path is not None:
+        candidate = Path(default_path)
+        if candidate.exists():
+            return str(candidate.resolve())
+        logger.warning("resolve_path: 默认文件不存在: %s", default_path)
         return str(candidate)
 
+    # 惰性发现首个数据文件（不再硬编码架次文件名）
     fallback_dirs = [PROJECT_ROOT / "testdata", PROJECT_ROOT / "data", PROJECT_ROOT / "data" / "raw", PROJECT_ROOT / "data" / "processed", PROJECT_ROOT]
     for folder in fallback_dirs:
         if not folder.exists():
             continue
-        for pattern in ("*.txt", "*.csv", "*.tsv", "*.dat"):
+        for pattern in ("*.txt", "*.tsv", "*.dat"):
             matches = sorted(folder.glob(pattern))
             for match in matches:
                 if match.name.lower() in {"requirements.txt", "pyproject.toml", "readme.md"}:
                     continue
                 return str(match.resolve())
 
-    return str(candidate)
+    logger.warning("resolve_path: 未找到任何数据文件")
+    return ""
 
 
 def resolve_mapping_path(csv_path: str | None = None) -> str:
