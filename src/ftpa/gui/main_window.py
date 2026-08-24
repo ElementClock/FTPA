@@ -57,7 +57,32 @@ from ..utils.time_utils import format_time_seconds
 import numpy as np
 
 import logging
+import math
+
 logger = logging.getLogger(__name__)
+
+
+def parse_threshold_text(text: str, side_label: str) -> tuple[float | None, str | None]:
+    """解析阈值输入。
+
+    Args:
+        text: 输入框原始文本。
+        side_label: 阈值侧标识（如"左阈值"），用于错误提示。
+
+    Returns:
+        (float, None) — 解析成功；
+        (None, 错误消息) — 空/非法/非有限值。
+    """
+    stripped = text.strip()
+    if not stripped:
+        return None, f"{side_label}为空，请输入阈值后再应用"
+    try:
+        value = float(stripped)
+    except ValueError:
+        return None, f"{side_label}不是有效数字: '{stripped}'"
+    if not math.isfinite(value):
+        return None, f"{side_label}必须为有限数值: '{stripped}'"
+    return value, None
 
 
 class MainWindow(QMainWindow):
@@ -534,23 +559,24 @@ class MainWindow(QMainWindow):
 
     # ── 穿越控制 ──
 
-    def _safe_float(self, text: str, default: float = 0.0) -> float:
-        """安全转换文本为浮点数，失败时返回默认值并提示。"""
-        try:
-            return float(text) if text else default
-        except ValueError:
-            self._append_log(f"无效数值输入: '{text}'，使用默认值 {default}")
-            return default
-
     def _on_apply_crossing(self):
         """应用穿越分析。
 
         当有框选区域时，在框选区间内执行穿越检测；
         否则使用当前视图范围（原有行为）。
         """
-        left_val = self._safe_float(self.left_threshold.text(), 0.0)
+        # 阈值必须为有效数值（空/非法/非有限值均拒绝，避免以 0.0 静默缩放）
+        left_val, left_err = parse_threshold_text(self.left_threshold.text(), "左阈值")
+        if left_err is not None:
+            self._append_log(f"[穿越分析] {left_err}")
+            self.status_bar.showMessage(left_err, 3000)
+            return
         left_mode = self.left_mode.currentText()
-        right_val = self._safe_float(self.right_threshold.text(), 0.0)
+        right_val, right_err = parse_threshold_text(self.right_threshold.text(), "右阈值")
+        if right_err is not None:
+            self._append_log(f"[穿越分析] {right_err}")
+            self.status_bar.showMessage(right_err, 3000)
+            return
         right_mode = self.right_mode.currentText()
         # 从中文标签反查 field_name
         master_label = self.master_combo.currentText()
