@@ -37,6 +37,9 @@ def compute_takeoff_landing_stats(
 
     # 保留原有“窗口完全超出数据范围/起止倒置时返回无数据”的语义；
     # 仅 None / 空字符串表示全时段。
+    # 说明（L9）：select_time_window 对起止倒置/超界采用“钳位+交换”的 MATLAB 兼容语义，
+    # 但起降统计要求“窗口完全无数据即返回无数据”，故这里先做显式前置校验，
+    # 而非依赖 select_time_window 的最近点钳位。
     t_vec_sec = time_to_seconds_array(t_vec)
     t_start_sec = parse_time_to_seconds(t_start) if t_start is not None and t_start != "" else None
     t_end_sec = parse_time_to_seconds(t_end) if t_end is not None and t_end != "" else None
@@ -69,16 +72,21 @@ def compute_takeoff_landing_stats(
     except KeyError as e:
         return f'变量缺失: {e}'
 
-    rh0_idx = np.where(RH == 0)[0]
-    if len(rh0_idx) == 0:
-        Vc0 = np.nan
-        W0 = np.nan
-        CG0 = np.nan
+    # 触水点判定（M4）：先找首个 RH>0（离地），再在离地后搜索首个 RH==0（触水）。
+    # 全程 RH==0（未起飞）→ 触水参数 NaN，避免地面滑行段被误判为触水。
+    rh_pos_idx = np.where(RH > 0)[0]
+    if len(rh_pos_idx) == 0:
+        Vc0 = W0 = CG0 = np.nan
     else:
-        rh0 = rh0_idx[0]
-        Vc0 = Vc[rh0]
-        W0 = W[rh0]
-        CG0 = CG[rh0]
+        liftoff = rh_pos_idx[0] + 1  # 离地之后的第一个样本起搜索
+        touched = np.where(RH[liftoff:] == 0)[0]
+        if len(touched) == 0:
+            Vc0 = W0 = CG0 = np.nan
+        else:
+            rh0 = liftoff + touched[0]
+            Vc0 = Vc[rh0]
+            W0 = W[rh0]
+            CG0 = CG[rh0]
 
     stats_str = (f'触水时( RH=0 )：空速={Vc0:.2f}  总重={W0:.2f}  重心={CG0:.2f} '
                  f'最大俯仰角={np.max(Theta):.2f}  最大法向过载={np.max(Nz):.2f}')

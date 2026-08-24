@@ -19,6 +19,21 @@ class TestIntervalAnalysis:
         assert result.startswith("积分：")
         assert abs(float(result.split("：")[1]) - 10.0) < 1e-6
 
+    def test_integral_skips_nan_gap_segmentwise(self):
+        """中间含 NaN 块时，积分=各连续有效段之和，NaN 边界时间不塌缩（L3）。"""
+        time = np.arange(0.0, 11.0)          # 0..10
+        values = np.ones_like(time)
+        values[5:8] = np.nan                # 索引 5,6,7 为 NaN
+        result = run_interval_analysis(time, values, "积分")
+        # 有效段 [0..4] 与 [8..10]：4 + 2 = 6（若丢 NaN 后把 4→8 连起会得 10）
+        assert abs(float(result.split("：")[1]) - 6.0) < 1e-6
+
+    def test_integral_all_nan(self):
+        time = np.array([0.0, 1.0, 2.0])
+        values = np.array([np.nan, np.nan, np.nan])
+        result = run_interval_analysis(time, values, "积分")
+        assert result.startswith("积分：有效数据不足")
+
     def test_max(self):
         time = np.array([0.0, 1.0, 2.0, 3.0])
         values = np.array([1.0, 5.0, 2.0, 4.0])

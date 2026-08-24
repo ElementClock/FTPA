@@ -10,6 +10,7 @@ from typing import Optional, Dict, List, Union
 from ..utils.time_utils import select_time_window, format_time_seconds
 from .basic import compute_stat, find_crossing_points
 from ..data.label_map import LabelMap
+from ..data import META_KEYS
 from ..data.summary import generate_data_summary, print_data_summary  # noqa: F401 — re-exports for backward compatibility
 
 
@@ -59,12 +60,7 @@ def compute_var_stats_typed(time_vec: np.ndarray, start_t: Union[float, str],
             raise ValueError(f'TIME 与变量 "{spec.name}" 的长度必须相同。')
 
         segment = spec.data[i_start:i_end + 1]
-        result = compute_stat(segment, spec.stat_type)
-        if len(result) == 3:
-            min_v, max_v, desc = result
-            val = (min_v, max_v)
-        else:
-            val, desc = result
+        val, desc = compute_stat(segment, spec.stat_type)
 
         var_names.append(spec.name)
         descs.append(desc)
@@ -184,13 +180,8 @@ def _compute_group_stats_typed_data(time_vec: np.ndarray, start_t: Union[float, 
         vals = []
         for k in range(n_vars):
             segment = data_list[k][i_start:i_end + 1]
-            result = compute_stat(segment, stat_type)
-            if len(result) == 3:
-                min_v, max_v, desc = result
-                vals.append((min_v, max_v))
-            else:
-                val, desc = result
-                vals.append(val)
+            val, desc = compute_stat(segment, stat_type)
+            vals.append(val)
 
         name_str = '/'.join(name_list)
         val_str = '/'.join(_format_stat_value(v) for v in vals)
@@ -314,8 +305,8 @@ def _statistics_params_impl(
         return lines
 
     for field_name in fields_to_process:
-        # 仅在 LabelMap 模式下需要跳过 TIME/filename（因为可能来自 data.keys()）
-        if use_labelmap and (field_name == 'TIME' or field_name == 'filename'):
+        # 仅在 LabelMap 模式下需要跳过元数据键（因为可能来自 data.keys()）
+        if use_labelmap and field_name in META_KEYS:
             continue
 
         signal = data[field_name]

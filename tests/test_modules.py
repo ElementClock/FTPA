@@ -86,9 +86,9 @@ def test_compute_stat():
     assert val == 5.0 and desc == '最大值', f'max 失败: {val}, {desc}'
     print(f'[OK] max: {val} ({desc})')
     
-    result = compute_stat(data, 'range')
-    assert result == (1.0, 5.0, '范围'), f'range 失败: {result}'
-    print(f'[OK] range: {result[0]:.4g} ~ {result[1]:.4g} ({result[2]})')
+    val, desc = compute_stat(data, 'range')
+    assert val == (1.0, 5.0) and desc == '范围', f'range 失败: {val}, {desc}'
+    print(f'[OK] range: {val[0]:.4g} ~ {val[1]:.4g} ({desc})')
     
     val, desc = compute_stat(data, 'mean')
     assert val == 3.0 and desc == '平均值', f'mean 失败: {val}, {desc}'

@@ -101,6 +101,17 @@ def param_extract(filename: str) -> dict:
         else:
             data['TIME'] = np.array([], dtype='timedelta64[ns]')
 
+    # 字段名碰撞检测：不同原始列映射到同一 field_name 时，后写会静默覆盖前者（L6）
+    seen_fields: dict[str, int] = {}
+    for raw_name, field_name in zip(raw_names, field_names):
+        if raw_name == 'TIME':
+            continue
+        seen_fields[field_name] = seen_fields.get(field_name, 0) + 1
+    dup_fields = {f for f, c in seen_fields.items() if c > 1}
+    if dup_fields:
+        involved = [raw for raw, f in zip(raw_names, field_names) if f in dup_fields and raw != 'TIME']
+        logger.warning("字段名碰撞，同名原始列仅保留最后一个: %s → %s", involved, sorted(dup_fields))
+
     # 构建数据字典，数值列直接 float64（内联转换，避免下游重复转换）
     for raw_name, field_name in zip(raw_names, field_names):
         if raw_name == 'TIME':
@@ -111,6 +122,8 @@ def param_extract(filename: str) -> dict:
         except (ValueError, TypeError):
             # 非数值列保持原样
             data[field_name] = col_data
+
+    del df  # 尽早释放 DataFrame 容器（M8-2；数值列 buffer 仍被 data 引用）
 
     # 附加文件名
     data['filename'] = abs_file

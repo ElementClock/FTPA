@@ -206,8 +206,8 @@ def test_statistics():
     assert abs(val - np.std(data, ddof=1)) < 1e-10
     print("[PASS] compute_stat (std) 测试通过")
     
-    result = compute_stat(data, 'range')
-    assert len(result) == 3 and result[0] == 1.0 and result[1] == 5.0 and result[2] == '范围'
+    val, desc = compute_stat(data, 'range')
+    assert val == (1.0, 5.0) and desc == '范围'
     print("[PASS] compute_stat (range) 测试通过")
     
     val, desc = compute_stat(data, 'points')

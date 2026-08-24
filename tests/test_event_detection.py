@@ -209,5 +209,24 @@ class TestComputeTakeoffLandingStats:
         assert f'{expected_vc0:.2f}' in result
 
 
+def test_ground_start_rh_ignores_taxi():
+    """数据从地面开始（RH 前段为 0）：不把地面滑行误判为触水点（M4）。"""
+    n = 12
+    data = _make_data(n=n, rh_zero_at=None)
+    # 前 4 秒为地面（RH=0），第 4 秒离地，第 9 秒触水
+    data['RH'][:4] = 0.0
+    data['RH'][4:9] = 100.0
+    data['RH'][9:] = 0.0
+    lm = _MockLabelMap(_LABEL_MAP)
+
+    result = compute_takeoff_landing_stats(0, 11, data, lm)
+
+    # 触水点应为离地后的首个 RH=0（索引 9），而非地面起点（索引 0）
+    expected_vc0 = np.linspace(80, 120, n)[9]
+    assert f'{expected_vc0:.2f}' in result
+    # 地面起点（索引 0）的 Vc0=80.00 不应被当作触水空速
+    assert '空速=80.00' not in result
+
+
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])

@@ -1,5 +1,8 @@
 """
 基础统计函数
+
+项目约定：
+- 标准差统一为**样本标准差**（ddof=1），见 :func:`compute_stat`。
 """
 
 from __future__ import annotations
@@ -46,7 +49,8 @@ def compute_stat(data: np.ndarray, stat_type: str | StatType):
             - 'points' / StatType.POINTS: 数据点数
 
     返回:
-        (value, description): 统计值和描述字符串的元组
+        (value, description): 统计值和描述字符串的元组。
+        'range' 的 value 为 ``(min, max)`` 二元组，格式化见 ``_format_stat_value``。
     """
     if len(data) == 0:
         raise ValueError("数据数组不能为空")
@@ -65,7 +69,7 @@ def compute_stat(data: np.ndarray, stat_type: str | StatType):
     elif stat_type == 'range':
         min_val = np.min(data)
         max_val = np.max(data)
-        return float(min_val), float(max_val), '范围'
+        return (float(min_val), float(max_val)), '范围'
     elif stat_type == 'mean':
         return np.mean(data), '平均值'
     elif stat_type == 'std':
@@ -79,6 +83,11 @@ def compute_stat(data: np.ndarray, stat_type: str | StatType):
 def find_crossing_points(values: np.ndarray, threshold: float, mode: str) -> Optional[int]:
     """
     以 MATLAB 风格检测阈值穿越点。
+
+    .. note:: Down 语义与本模块 :func:`find_all_crossings` 不同：
+        本函数 Down 为 ``prev > t 且 next <= t``（严格符左，含等右）；
+        ``find_all_crossings(direction='down')`` 为 ``prev >= t 且 next < t``。
+        二者有测试锚定、分别服务不同调用方，勿静默统一。
 
     参数:
         values: 输入序列
@@ -114,9 +123,9 @@ def find_all_crossings(values: np.ndarray, threshold: float, direction: str) -> 
 
     与 find_crossing_points 的区别：
         - 返回全部穿越索引（列表），而非按 First/Last 取首个/末个；
-        - direction 取 'up'/'down'，down 使用 (prev >= threshold) & (next < threshold) 语义，
-          与 find_crossing_points 的 Down 模式 (prev > threshold) & (next <= threshold) 不同，
-          故二者保留各自实现以维持既有行为。
+        - ``direction='down'`` 使用 ``(prev >= threshold) & (next < threshold)`` 语义，
+          与 find_crossing_points 的 Down 模式 ``(prev > threshold) & (next <= threshold)`` 不同，
+          故二者保留各自实现以维持既有行为（见 find_crossing_points 的对照说明）。
 
     参数:
         values: 输入序列

@@ -398,11 +398,9 @@ class TestStatistics:
     def test_compute_stat_range(self):
         """测试范围统计"""
         data = np.array([1.0, 2.0, 3.0, 4.0, 5.0])
-        result = compute_stat(data, 'range')
-        assert len(result) == 3
-        assert result[0] == 1.0
-        assert result[1] == 5.0
-        assert result[2] == '范围'
+        val, desc = compute_stat(data, 'range')
+        assert val == (1.0, 5.0)
+        assert desc == '范围'
     
     def test_compute_stat_points(self):
         """测试数据点数统计"""

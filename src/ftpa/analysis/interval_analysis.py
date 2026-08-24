@@ -27,22 +27,31 @@ class IntervalOperation(ABC):
         """执行分析并返回格式化结果文本。"""
 
 
-def _valid_data(time_sec: np.ndarray, values: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    """过滤 NaN，返回有效的时间与数值数组。"""
-    valid = ~np.isnan(values)
-    return time_sec[valid], values[valid]
-
-
 class IntegralOperation(IntervalOperation):
     """数值积分。"""
 
     name = "积分"
 
     def execute(self, time_sec: np.ndarray, values: np.ndarray) -> str:
-        t, v = _valid_data(time_sec, values)
-        if len(t) < 2:
+        t = np.asarray(time_sec, dtype=float)
+        v = np.asarray(values, dtype=float)
+        valid = ~np.isnan(v)
+        if np.count_nonzero(valid) < 2:
             return "积分：有效数据不足"
-        return f"积分：{np.trapezoid(v, t):.6g}"
+
+        # 按连续有效段分段梯形积分再求和：NaN 边界处时间不塌缩（L3），
+        # 避免把被 NaN 隔开的远点直接相连导致积分系统性偏小。
+        idx = np.where(valid)[0]
+        segments: list[tuple[int, int]] = []
+        seg_start = int(idx[0])
+        for i in range(1, len(idx)):
+            if idx[i] - idx[i - 1] > 1:
+                segments.append((seg_start, int(idx[i - 1]) + 1))
+                seg_start = int(idx[i])
+        segments.append((seg_start, int(idx[-1]) + 1))
+
+        total = sum(np.trapezoid(v[s:e], t[s:e]) for s, e in segments)
+        return f"积分：{total:.6g}"
 
 
 class MaxOperation(IntervalOperation):

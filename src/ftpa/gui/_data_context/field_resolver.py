@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import logging
 
+from ...data import META_KEYS
 from ...data.label_map import LabelMap
 from ...utils.strings import column_to_field_name
 
@@ -43,8 +44,7 @@ class FieldResolver:
         """所有字段名（不包括 TIME 和元数据键）。"""
         if not self._data:
             return []
-        _meta_keys = {"TIME", "filename", "_name_mapping"}
-        return [k for k in self._data if k not in _meta_keys]
+        return [k for k in self._data if k not in META_KEYS]
 
     def get_field_labels(self) -> dict[str, str]:
         """字段名 -> 中文标签（惰性缓存）。"""

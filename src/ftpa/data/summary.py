@@ -17,6 +17,8 @@ from __future__ import annotations
 
 import numpy as np
 from typing import Dict
+
+from . import META_KEYS  # D3：元数据键单一来源
 from ..utils.time_utils import format_duration_chinese
 
 
@@ -30,11 +32,10 @@ def generate_data_summary(data: Dict[str, np.ndarray]) -> Dict:
     返回:
         统计摘要字典
     """
-    # 元数据键不计入通道数（TIME / filename / _name_mapping 等）
-    _meta_keys = {'TIME', 'filename', '_name_mapping'}
+    # 元数据键不计入通道数（META_KEYS：TIME / filename / _name_mapping 等，D3 单一来源）
     summary = {
         'total_records': len(data.get('TIME', [])),
-        'total_channels': sum(1 for k in data if k not in _meta_keys),
+        'total_channels': sum(1 for k in data if k not in META_KEYS),
         'time_range': {},
         'channels': {}
     }
@@ -65,7 +66,7 @@ def generate_data_summary(data: Dict[str, np.ndarray]) -> Dict:
                     'min': float(np.min(valid_data)),
                     'max': float(np.max(valid_data)),
                     'mean': float(np.mean(valid_data)),
-                    'std': float(np.std(valid_data)),
+                    'std': float(np.std(valid_data, ddof=1)),
                     'valid_count': int(len(valid_data)),
                     'invalid_count': int(len(value) - len(valid_data))
                 }

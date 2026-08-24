@@ -538,16 +538,22 @@ class CrossingAnalyzer:
                     label = w.ctx.get_label(f)
                     lines.append(f"  {label}: min={np.nanmin(seg):.4g}, max={np.nanmax(seg):.4g}, mean={np.nanmean(seg):.4g}")
 
-        # 穿越信息
+        # 穿越信息 —— 复用当前窗口切片 + NaN 过滤，与 _do_crossing_search 口径一致（M1）
+        ts = w.ctx.query.get_time_sec()
         for side, (val, mode) in [("左", (self.left_val, self.left_mode)),
                                    ("右", (self.right_val, self.right_mode))]:
             if self.master_field and w.ctx:
                 master_arr = np.asarray(w.ctx.query.get_signal_data(self.master_field) or [], dtype=float)
-                pos = find_crossing_points(master_arr, val, mode)
-                ts = w.ctx.query.get_time_sec()
+                sub_sig = master_arr[i_start:i_end]
+                valid = ~np.isnan(sub_sig)
+                sub_sig = sub_sig[valid]
+                if len(sub_sig) < 2:
+                    lines.append(f"穿越({side}): {mode} → 无")
+                    continue
+                pos = find_crossing_points(sub_sig, val, mode)
                 if pos is not None and ts is not None:
-                    x = ts[pos]
-                    lines.append(f"穿越({side}): {mode} → {format_time_seconds(float(x))} ({self.master_field}={master_arr[pos]:.4g})")
+                    x = ts[i_start:i_end][valid][pos]
+                    lines.append(f"穿越({side}): {mode} → {format_time_seconds(float(x))} ({self.master_field}={sub_sig[pos]:.4g})")
                 else:
                     lines.append(f"穿越({side}): {mode} → 无")
 

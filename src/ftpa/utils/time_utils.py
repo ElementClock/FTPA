@@ -75,6 +75,14 @@ def select_time_window(time_vec, t_start, t_end):
         - i_end: 窗口结束索引（含），用于 data[i_start:i_end+1] 切片
         - t_start_actual: 实际起始时间（TIME 中离 t_start 最近的点）
         - t_end_actual: 实际结束时间（TIME 中离 t_end 最近的点）
+
+    边界语义（MATLAB 兼容，勿与其他"无数据即报错"的调用方混淆）：
+        - 空数组：返回 (0, 0, 0.0, 0.0)；
+        - 起止倒置（t_start > t_end）：自动交换，返回较小区间；
+        - 超出数据范围：钳位到最近数据点（非报错）；
+        - None / 空字符串：对应侧取全时段。
+        需要"窗口完全无数据即返回"语义的调用方（如 event_detection），
+        应自行前置校验，见 event_detection.py 的说明。
     """
     # 转换为数值秒
     time_sec = time_to_seconds_array(time_vec)
