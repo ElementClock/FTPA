@@ -7,7 +7,7 @@ name = "ftpa"
 version = "1.0.1"
 description = "飞机性能操稳数据分析工具 - AG600试飞数据处理"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 license = {text = "MIT"}
 authors = [
     {name = "FTPA Team", email = "ftpa@example.com"}
@@ -17,7 +17,6 @@ classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Science/Research",
     "License :: OSI Approved :: MIT License",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
@@ -32,16 +31,12 @@ dependencies = [
     "matplotlib>=3.11.0,<4.0.0",
     "scipy>=1.18.0,<2.0.0",
     "openpyxl>=3.1.0,<4.0.0",
-    "plotly>=6.9.0,<7.0.0",
     "python-dateutil>=2.9.0,<3.0.0",
     "PySide6>=6.6.0,<7.0.0",
     "chardet>=5.0.0,<6.0.0",
 ]
 
 [project.optional-dependencies]
-config = [
-    "tomli>=2.0.0;python_version<'3.11'",
-]
 dev = [
     "pytest>=9.0.0",
     "pytest-cov>=4.0.0",
@@ -58,7 +53,7 @@ where = ["src"]
 
 [tool.black]
 line-length = 100
-target-version = ['py310']
+target-version = ['py311']
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -69,7 +64,7 @@ addopts = "-v"
 # 如需覆盖率报告，安装 pytest-cov 后使用: pytest --cov=src/ftpa --cov-report=html
 
 [tool.mypy]
-python_version = "3.10"
+python_version = "3.11"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true

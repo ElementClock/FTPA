@@ -10,23 +10,14 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+import tomllib
+
 logger = logging.getLogger(__name__)
 
 # ── 项目级共享常量 ──
-# 标签映射 Excel 文件名。定义于 config（顶层）以供 utils 与 data 共享，
-# 避免底层 utils 反向依赖 data 子包（P1-ARCH-2）。
 # 标签映射文件名（唯一输入，可维护的 CSV）。定义于 config（顶层）以供 utils 与 data 共享，
 # 避免底层 utils 反向依赖 data 子包（P1-ARCH-2）。
 MAPPING_FILENAME = "参数名.csv"
-
-# ── TOML 解析兼容层 ──
-try:
-    import tomllib  # Python 3.11+
-except ModuleNotFoundError:
-    try:
-        import tomli as tomllib  # pip install tomli (Python 3.10 fallback)
-    except ModuleNotFoundError:
-        tomllib = None  # type: ignore[assignment]
 
 
 @dataclass(frozen=True)
@@ -58,7 +49,7 @@ class DataConfig:
     trim_head: int = 50
     trim_tail: int = 50
     cache_max_size: int = 5
-    cache_max_memory_mb: int = 500
+    cache_max_memory_mb: int = 2048  # 应大于最大单文件数据集内存占用（L5）
     max_rows: int = 5_000_000
 
 
@@ -126,13 +117,6 @@ def load_config(path: Path | None = None) -> Config:
     config_path = path or _find_config_file()
     if config_path is None:
         logger.debug("未找到配置文件，使用默认值")
-        return Config()
-
-    if tomllib is None:
-        logger.warning(
-            "配置文件 %s 存在，但缺少 TOML 解析库（需 Python 3.11+ 或 pip install tomli），使用默认值",
-            config_path,
-        )
         return Config()
 
     try:

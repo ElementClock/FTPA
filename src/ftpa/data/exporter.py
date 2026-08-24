@@ -154,8 +154,6 @@ def _timedelta_to_string(time_array: np.ndarray) -> np.ndarray:
     milliseconds = np.round((remainder - seconds) * 1000).astype(np.int32)
 
     # 向量化格式化
-    result = np.char.zfill(hours.astype(str), 2)
-    result = np.char.add(result, np.char.zfill(minutes.astype(str), 2).astype(str))
     # 逐元素拼接更可靠（np.char 对长链拼接有兼容性问题）
     return np.array([
         f"{h:02d}:{m:02d}:{s:02d}.{ms:03d}"
