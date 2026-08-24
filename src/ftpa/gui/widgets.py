@@ -5,7 +5,6 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QBrush, QColor
 from PySide6.QtWidgets import (
     QLineEdit,
     QTreeWidget,
@@ -58,21 +57,19 @@ class ParameterTreeWidget(QWidget):
 
         Args:
             field_labels: 字段名 -> 显示标签（可含单位）。
-            available_fields: 当前数据中可用的字段名集合；不在集合中的参数置灰不可选。
-                为 None 时全部可用（保持旧行为）。
+            available_fields: 当前数据中可用的字段名集合；不在集合中的参数
+                不显示。为 None 时全部显示（保持旧行为）。
         """
         self._field_map = {}
         self.tree.clear()
         for field_name, display_label in sorted(field_labels.items(), key=lambda x: x[1]):
+            if available_fields is not None and field_name not in available_fields:
+                # 参数库中存在但当前数据中不存在：不显示
+                continue
             self._field_map[display_label] = field_name
             item = QTreeWidgetItem([display_label])
             item.setData(0, Qt.UserRole, field_name)
-            if available_fields is not None and field_name not in available_fields:
-                # 参数库中存在但当前数据中不存在：置灰、不可选、不可拖拽
-                item.setFlags(item.flags() & ~Qt.ItemIsEnabled)
-                item.setForeground(0, QBrush(QColor("#999999")))
-            else:
-                item.setFlags(item.flags() | Qt.ItemIsSelectable)
+            item.setFlags(item.flags() | Qt.ItemIsSelectable)
             self.tree.addTopLevelItem(item)
 
     def clear_params(self) -> None:

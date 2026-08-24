@@ -285,7 +285,7 @@ gui/ (PySide6 交互界面 + matplotlib 渲染；区间分析 analysis/interval_
 - `panel_preview.py` — `PreviewPanel`: 右下角曲线预览区，点选右侧参数时刷新显示对应数据曲线（精简显示，仅曲线本身；可通过「视图 → 曲线预览」显示/隐藏）
 - `_downsampler.py` — `min_max_downsample()`: 向量化 min-max 降采样（np.reshape + nanmin/nanmax，500K 点 <1ms）
 - `_font_config.py` — `configure_display_font()`: Matplotlib CJK 字体配置（线程安全，从 `plotting.py` 提取）
-- `widgets.py` — `ParameterTreeWidget`: 参数树面板（完整参数库 + 不可用参数置灰）
+- `widgets.py` — `ParameterTreeWidget`: 参数树面板（完整参数库，仅显示当前数据包含的参数）
 - `worker.py` — 后台线程：
   - `DataLoaderWorker`: 数据加载 QThread
 - `log_handler.py` — `install_gui_logger()`: logging → GUI 信息显示桥接
