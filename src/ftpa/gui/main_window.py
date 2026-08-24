@@ -93,6 +93,9 @@ class MainWindow(QMainWindow):
         self.dry_run = dry_run
         self.data_context: DataContext | None = None
         self._load_thread = None
+        # 信号下拉框的 label→field 反向映射（防御性初始化，见 _fill_combo_with_pairs）
+        self._combo_label_to_field: dict[str, str] = {}
+        self._target_combo_label_to_field: dict[str, str] = {}
         self._build_ui()
 
     def _build_ui(self):
@@ -418,25 +421,15 @@ class MainWindow(QMainWindow):
 
     # ── 区间分析 ──
 
-    def _update_target_signal_combo(self, ctx: DataContext) -> None:
-        """填充区间分析目标信号下拉框。"""
-        current_text = self.target_signal_combo.currentText()
-        self.target_signal_combo.clear()
-        self._target_combo_label_to_field: dict[str, str] = {}
+    def _update_target_signal_combo(self) -> None:
+        """填充区间分析目标信号下拉框（仅列已添加到子图的参数，与主穿越下拉同源）。"""
+        pairs = self._subplot_label_field_pairs()
+        self._fill_combo_with_pairs(self.target_signal_combo, pairs, self._target_combo_label_to_field)
 
-        for field in ctx.get_field_names():
-            label = ctx.get_label(field)
-            self._target_combo_label_to_field[label] = field
-            self.target_signal_combo.addItem(label)
-
-        has_fields = self.target_signal_combo.count() > 0
+        has_fields = len(pairs) > 0
         self.target_signal_combo.setEnabled(has_fields)
         self.analysis_op_combo.setEnabled(has_fields)
         self.analysis_run_btn.setEnabled(has_fields)
-
-        if current_text in self._target_combo_label_to_field:
-            self.target_signal_combo.setCurrentText(current_text)
-        self.analysis_interval_label.setText("区间: 当前视图")
 
     def _reset_interval_analysis_controls(self) -> None:
         """清空并禁用区间分析控件。"""
@@ -517,45 +510,57 @@ class MainWindow(QMainWindow):
     # ── 参数树操作 ──
 
     def _on_subplot_fields_changed(self, field_name: str = ""):
-        """子图信号列表变化 / 拖放参数回调 — 更新参数树指示器和穿越信号下拉框。"""
+        """子图信号列表变化 / 拖放参数回调 — 更新参数树指示器与两个信号下拉框。"""
         self._update_param_tree_indicators()
         self._update_master_combo()
+        self._update_target_signal_combo()
 
     def _update_param_tree_indicators(self):
         """更新参数树中的使用指示器。"""
         self.param_tree.update_indicators(self.plot_widget.subplot_fields)
 
-    def _update_master_combo(self):
-        """更新主穿越信号下拉框（显示中文标签）。"""
-        current_text = self.master_combo.currentText()
-        self.master_combo.clear()
-        self._combo_label_to_field: dict[str, str] = {}
+    def _subplot_label_field_pairs(self) -> list[tuple[str, str]]:
+        """所有子图信号并集，转中文标签并按标签排序。
 
+        返回 [(中文标签, field_name), ...]。data_context 为空时回退用字段名作标签，
+        与主穿越下拉历史行为一致。
+        """
         fields_set: set[str] = set()
         for flist in self.plot_widget.subplot_fields.values():
             fields_set.update(flist)
 
-        if not fields_set:
+        ctx = self.data_context
+        pairs = [(ctx.get_label(f) if ctx else f, f) for f in fields_set]
+        pairs.sort(key=lambda x: x[0])
+        return pairs
+
+    @staticmethod
+    def _fill_combo_with_pairs(combo: QComboBox, pairs: list[tuple[str, str]],
+                               mapping: dict[str, str]) -> None:
+        """清空并填充下拉框，建立 label→field 反查映射，尽量恢复原选中项。
+
+        重复中文标签时 mapping 后者覆盖前者（历史行为，多个字段共享同一标签的场景）。
+        """
+        current_text = combo.currentText()
+        combo.clear()
+        mapping.clear()
+        for label, field in pairs:
+            mapping[label] = field
+            combo.addItem(label)
+        if current_text in mapping:
+            combo.setCurrentText(current_text)
+
+    def _update_master_combo(self):
+        """更新主穿越信号下拉框（显示中文标签）。"""
+        pairs = self._subplot_label_field_pairs()
+
+        if not pairs:
+            self.master_combo.clear()
             self.master_combo.setEnabled(False)
             return
 
-        # 按 display_label 排序，建立反向映射
-        ctx = self.data_context
-        label_field_pairs: list[tuple[str, str]] = []
-        for f in fields_set:
-            label = ctx.get_label(f) if ctx else f
-            label_field_pairs.append((label, f))
-        label_field_pairs.sort(key=lambda x: x[0])
-
-        for label, field in label_field_pairs:
-            self._combo_label_to_field[label] = field
-            self.master_combo.addItem(label)
-
+        self._fill_combo_with_pairs(self.master_combo, pairs, self._combo_label_to_field)
         self.master_combo.setEnabled(True)
-
-        # 恢复之前的选中项
-        if current_text in self._combo_label_to_field:
-            self.master_combo.setCurrentText(current_text)
 
     # ── 穿越控制 ──
 
@@ -754,8 +759,8 @@ class MainWindow(QMainWindow):
         # 绑定预览区并清空初始状态
         self.preview_panel.set_data_context(ctx)
 
-        # 填充区间分析目标信号
-        self._update_target_signal_combo(ctx)
+        # 填充区间分析目标信号（数据源为准子图信号；上方 subplot_fields 赋值已触发一次刷新）
+        self._update_target_signal_combo()
 
         # 启用控件
         self.apply_btn.setEnabled(True)
