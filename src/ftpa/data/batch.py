@@ -1,7 +1,6 @@
 """批量处理模块 —— 支持多文件批量处理和分析。
 
-从 batch_processor.py 迁移至 data/ 子包，
-消除 GUI panel_batch.py 对根目录 CLI 模块的依赖。
+从 batch_processor.py 迁移至 data/ 子包，作为公共 API 保留。
 """
 
 import glob
