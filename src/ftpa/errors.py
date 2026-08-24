@@ -36,8 +36,3 @@ class FormatLoadError(LoadError):
 class ResourceLoadError(LoadError):
     """内存不足 / I/O 错误。"""
     pass
-
-
-class LabelMapLoadError(LoadError):
-    """映射表加载失败（不阻塞主流程，降级到无标签模式）。"""
-    pass

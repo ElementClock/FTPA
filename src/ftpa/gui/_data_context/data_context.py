@@ -18,6 +18,7 @@ from pathlib import Path
 import numpy as np
 
 from ...data.label_map import LabelMap
+from ...errors import FormatLoadError
 from .export_service import DataExportService
 from .field_resolver import FieldResolver
 from .loading import LOADERS, LoadResult
@@ -68,7 +69,6 @@ class DataContext:
         self._data_path: str = ""
         self._excel_path: str = ""
         self._source_type: str = ""
-        self.analysis_result: dict = {}
 
         # 组合对象
         self._field_resolver = FieldResolver(self._data)
@@ -254,7 +254,10 @@ class DataContext:
         ext = os.path.splitext(data_path)[1].lower()
         loader_cls = LOADERS.get(ext)
         if loader_cls is None:
-            loader_cls = LOADERS[".txt"]
+            raise FormatLoadError(
+                f"不支持的文件格式: {ext or '(无扩展名)'}（当前构型仅支持 .txt 数据）",
+                path=data_path,
+            )
         # Loader 在失败时抛出自定义异常（FileNotFoundLoadError 等），
         # 由调用方捕获；成功时返回 LoadResult。
         result = loader_cls().load(data_path, excel_path)
@@ -266,7 +269,6 @@ class DataContext:
         self._time_sec = result.time_sec
         self._lm = result.lm
         self._source_type = result.source_type
-        self.analysis_result = {}
 
         self._field_resolver.update(self._data, self._lm)
         self._query_svc.update(
@@ -293,7 +295,6 @@ class DataContext:
         self._stats_service.clear()
         self._loaded = False
         self._source_type = ""
-        self.analysis_result = {}
 
     @property
     def is_loaded(self) -> bool:

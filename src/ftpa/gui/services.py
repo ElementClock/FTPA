@@ -15,7 +15,6 @@ from ._data_context import (
     PlotDataService,
     DataLoader,
     TxtLoader,
-    CsvLoader,
     LoadResult,
 )
 from ._data_context.data_context import DATA_DIRS
@@ -29,7 +28,6 @@ __all__ = [
     "PlotDataService",
     "DataLoader",
     "TxtLoader",
-    "CsvLoader",
     "LoadResult",
     "DATA_DIRS",
 ]

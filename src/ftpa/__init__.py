@@ -32,7 +32,7 @@ from .data.batch import (
     batch_export_summaries
 )
 from .config import Config, CONFIG
-from .errors import FtpaError, LoadError, FileNotFoundLoadError, FormatLoadError, ResourceLoadError, LabelMapLoadError
+from .errors import FtpaError, LoadError, FileNotFoundLoadError, FormatLoadError, ResourceLoadError
 
 __all__ = [
     # Data loading
@@ -74,5 +74,4 @@ __all__ = [
     'FileNotFoundLoadError',
     'FormatLoadError',
     'ResourceLoadError',
-    'LabelMapLoadError',
 ]
