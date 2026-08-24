@@ -23,7 +23,6 @@
 from __future__ import annotations
 
 import os
-from pathlib import Path
 
 from PySide6.QtCore import Qt, QSettings
 from PySide6.QtGui import QAction
@@ -61,10 +60,6 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-PROJECT_ROOT = Path(__file__).resolve().parents[3]
-DEFAULT_TXT = PROJECT_ROOT / "FTPD-AG600-007-QD-260509-G-1-飞机性能操稳-32.txt"
-
-
 class MainWindow(QMainWindow):
     """FTPA 主窗口 — 3 行网格单屏布局。"""
 
@@ -73,7 +68,6 @@ class MainWindow(QMainWindow):
         self.dry_run = dry_run
         self.data_context: DataContext | None = None
         self._load_thread = None
-        self._analysis_thread = None
         self._build_ui()
 
     def _build_ui(self):
@@ -287,10 +281,6 @@ class MainWindow(QMainWindow):
         act_unload = QAction("卸载数据", self)
         act_unload.triggered.connect(self._unload_data)
         menu_file.addAction(act_unload)
-
-        act_sys_analysis = QAction("系统分析...", self)
-        act_sys_analysis.triggered.connect(self._run_system_analysis)
-        menu_file.addAction(act_sys_analysis)
 
         menu_file.addSeparator()
 
@@ -611,9 +601,9 @@ class MainWindow(QMainWindow):
         from ..utils import resolve_mapping_path
 
         settings = QSettings("FTPA", "FTPA")
-        last_dir = settings.value("last_data_dir", str(DEFAULT_TXT))
+        last_dir = settings.value("last_data_dir", "")
         dp, _ = QFileDialog.getOpenFileName(
-            self, "选择数据文件", last_dir, "数据文件 (*.txt *.csv);;文本文件 (*.txt);;CSV文件 (*.csv);;所有文件 (*)")
+            self, "选择数据文件", last_dir, "数据文件 (*.txt);;文本文件 (*.txt);;所有文件 (*)")
         if not dp:
             return
 
@@ -635,17 +625,12 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "文件错误", f"数据文件不存在:\n{data_path}")
             return
 
-        # 清理上一次加载的线程
+        # 禁止并发加载：上一线程仍在运行时，拒绝再次触发（H1）
         old_thread = getattr(self, '_load_thread', None)
+        if old_thread is not None and old_thread.isRunning():
+            QMessageBox.information(self, "加载中", "正在加载数据，请等待完成后再试。")
+            return
         self._load_thread = None
-        if old_thread is not None:
-            try:
-                if old_thread.isRunning():
-                    old_thread.quit()
-                    old_thread.wait(3000)
-            except RuntimeError:
-                logger.warning("旧加载线程清理失败", exc_info=True)
-            old_thread = None
 
         self.status_bar.showMessage("加载中...")
         self.apply_btn.setEnabled(False)
@@ -677,6 +662,12 @@ class MainWindow(QMainWindow):
 
     def _on_load_finished(self, ctx, msg: str):
         """数据加载完成回调。ctx 为 DataContext 对象或 None。"""
+        # 迟到回调防护：仅接受当前加载线程的信号（H1）
+        worker = self.sender()
+        if worker is not None and worker is not self._load_thread:
+            logger.info("忽略已作废加载线程的迟到回调")
+            return
+
         if ctx is None:
             self.status_bar.showMessage("加载失败")
             QMessageBox.critical(self, "加载失败", msg)
@@ -791,80 +782,6 @@ class MainWindow(QMainWindow):
         self.status_bar.showMessage("数据已卸载")
         self._append_log("数据已卸载")
 
-    # ── 系统分析 ──
-
-    def _run_system_analysis(self):
-        """运行系统级分析（发动机/燃油/电源/CAS）——后台线程执行，避免冻结 GUI。"""
-        if self.data_context is None or not self.data_context.is_loaded:
-            QMessageBox.information(self, "系统分析", "请先加载数据后再运行系统分析。")
-            return
-
-        from .worker import AnalysisWorker
-
-        # 清理上一次分析线程
-        old_thread = getattr(self, '_analysis_thread', None)
-        self._analysis_thread = None
-        if old_thread is not None:
-            try:
-                if old_thread.isRunning():
-                    old_thread.quit()
-                    old_thread.wait(3000)
-            except RuntimeError:
-                logger.warning("旧分析线程清理失败", exc_info=True)
-            old_thread = None
-
-        self.status_bar.showMessage("正在运行系统分析...")
-        self.apply_btn.setEnabled(False)
-
-        worker = AnalysisWorker(
-            self.data_context.query.get_raw_data(),
-            self.data_context.query.get_source_type(),
-            self,
-        )
-        worker.progress.connect(lambda p, m: self.status_bar.showMessage(m))
-        worker.analysis_finished.connect(self._on_analysis_finished)
-        self._analysis_thread = worker
-        worker.start()
-
-    def _on_analysis_finished(self, results, reports, error_msg: str):
-        """系统分析完成回调（主线程执行）。"""
-        if error_msg:
-            logger.error("系统分析失败: %s", error_msg)
-            QMessageBox.critical(self, "分析失败", error_msg)
-            self.status_bar.showMessage("系统分析失败")
-            self.apply_btn.setEnabled(True)
-            self._analysis_thread = None
-            return
-
-        try:
-            # 保存结果到 DataContext
-            if self.data_context is not None:
-                self.data_context.analysis_result = results
-
-            # 显示报告
-            report_lines = []
-            if reports:
-                for name, text in reports.items():
-                    if text:
-                        report_lines.append(text)
-                        report_lines.append("")
-
-            if report_lines:
-                self.info_display.setPlainText("\n".join(report_lines))
-            else:
-                self.info_display.setPlainText("系统分析完成，未生成报告（可能缺少相关数据列）。")
-
-            self.status_bar.showMessage("系统分析完成")
-            self._append_log("系统分析完成")
-            self.apply_btn.setEnabled(True)
-        except Exception as e:
-            logger.exception("系统分析完成后界面刷新失败")
-            QMessageBox.critical(self, "分析失败", f"系统分析结果展示出错：\n{e}")
-            self.status_bar.showMessage("系统分析失败")
-            self.apply_btn.setEnabled(True)
-        finally:
-            self._analysis_thread = None
-
     # ── 窗口关闭清理 ──
 
     def closeEvent(self, event):
@@ -876,27 +793,21 @@ class MainWindow(QMainWindow):
         except Exception:
             logger.warning("QSettings 保存失败", exc_info=True)
 
-        # 停止数据加载线程
+        # 后台加载线程仍在运行时：确认后等待其自然结束（H1，quit/wait 超时对重写
+        # run() 的 QThread 无效且 ~20s 加载必超时，故直接确认 + 无超时 wait）
         thread = getattr(self, '_load_thread', None)
-        if thread is not None:
-            try:
-                if thread.isRunning():
-                    thread.quit()
-                    thread.wait(3000)
-            except RuntimeError:
-                logger.warning("加载线程清理失败", exc_info=True)
+        if thread is not None and thread.isRunning():
+            reply = QMessageBox.question(
+                self, "确认退出",
+                "数据仍在后台加载中，等待其结束后再退出？",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.Yes,
+            )
+            if reply != QMessageBox.Yes:
+                event.ignore()
+                return
+            thread.wait()  # 无短超时，自然结束
             self._load_thread = None
-
-        # 停止系统分析线程
-        analysis_thread = getattr(self, '_analysis_thread', None)
-        if analysis_thread is not None:
-            try:
-                if analysis_thread.isRunning():
-                    analysis_thread.quit()
-                    analysis_thread.wait(3000)
-            except RuntimeError:
-                logger.warning("分析线程清理失败", exc_info=True)
-            self._analysis_thread = None
 
         # 清空数据上下文，释放 numpy 数组内存
         if self.data_context is not None:
