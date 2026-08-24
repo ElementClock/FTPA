@@ -111,6 +111,9 @@ class MainWindow(QMainWindow):
         self._right_splitter.setSizes([400, 180])
         self._right_layout.addWidget(self._right_splitter)
 
+        # 从 QSettings 恢复曲线预览区上次的可见状态（首次使用默认关闭）
+        self._restore_preview_visibility()
+
         self._splitter = QSplitter(Qt.Horizontal)
         self._splitter.addWidget(self.plot_widget)
         self._splitter.addWidget(self._right_panel)
@@ -298,11 +301,11 @@ class MainWindow(QMainWindow):
         act_panel.triggered.connect(self._toggle_param_panel)
         menu_view.addAction(act_panel)
 
-        act_preview = QAction("曲线预览", self)
-        act_preview.setCheckable(True)
-        act_preview.setChecked(True)
-        act_preview.triggered.connect(self._toggle_preview_panel)
-        menu_view.addAction(act_preview)
+        self._act_preview = QAction("曲线预览", self)
+        self._act_preview.setCheckable(True)
+        self._act_preview.setChecked(True)  # 实际可见性由 _restore_preview_visibility 决定
+        self._act_preview.triggered.connect(self._toggle_preview_panel)
+        menu_view.addAction(self._act_preview)
 
         act_status = QAction("状态栏", self)
         act_status.setCheckable(True)
@@ -356,6 +359,20 @@ class MainWindow(QMainWindow):
         if not visible:
             # 隐藏时清空已有预览，避免残留曲线占用内存
             self.preview_panel.clear_preview()
+
+    def _restore_preview_visibility(self) -> None:
+        """从 QSettings 恢复曲线预览区上次的可见状态（首次使用默认关闭）。"""
+        visible = False
+        try:
+            settings = QSettings("FTPA", "FTPA")
+            saved = settings.value("preview_panel_visible", False, type=bool)
+            if isinstance(saved, bool):
+                visible = saved
+        except TypeError:
+            logger.warning("preview_panel_visible 读取失败，使用默认值", exc_info=True)
+        self.preview_panel.setVisible(visible)
+        # action 连接的是 triggered 信号，程序化 setChecked 不会二次触发 _toggle_preview_panel
+        self._act_preview.setChecked(visible)
 
     # ── 子图选择 ──
 
@@ -786,10 +803,11 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event):
         """窗口关闭时清理后台线程与绘图资源，避免 C++ 对象退出时崩溃。"""
-        # 保存分隔条尺寸到 QSettings（用户下次启动恢复）
+        # 保存分隔条尺寸与曲线预览可见状态到 QSettings（用户下次启动恢复）
         try:
             settings = QSettings("FTPA", "FTPA")
             settings.setValue("splitter_sizes", self._splitter.sizes())
+            settings.setValue("preview_panel_visible", self.preview_panel.isVisible())
         except Exception:
             logger.warning("QSettings 保存失败", exc_info=True)
 
