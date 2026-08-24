@@ -20,7 +20,6 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
-from matplotlib.ticker import FuncFormatter
 
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import QMenu, QMessageBox
@@ -238,7 +237,7 @@ class PlotRenderer:
             ax.set_ylabel(self._compute_ylabel(fields, i))
 
         # 7. 通用装饰
-        self._apply_axis_decorations()
+        w._layout.apply_axis_decorations()
 
         # 8. 同步所有子图 X 轴范围：优先以有数据的子图为基准
         #    防止增量更新中新建 Line2D（ax.plot()）触发自动缩放导致 xlim 解耦
@@ -265,7 +264,7 @@ class PlotRenderer:
             ax.grid(True, alpha=0.3)
             self._render_subplot_from_scratch(ax, i, crossing_fields)
 
-        self._apply_axis_decorations()
+        w._layout.apply_axis_decorations()
         w._layout.apply_spine_color()
 
         # 全量重建后同步所有子图 X 轴范围：优先以有数据的子图为基准
@@ -373,58 +372,19 @@ class PlotRenderer:
             return self._widget.ctx.get_label(fields[0])
         return f"子图{idx + 1}"
 
-    def _apply_axis_decorations(self) -> None:
-        """应用 X 轴标签和时间格式化器（不触发重绘）。"""
-        w = self._widget
-        mode = w._layout_mode
-
-        # 确定底部子图索引（仅底部显示 X 轴标签）
-        bottom_indices: list[int] = []
-        if mode == "2x2":
-            bottom_indices = [2, 3]
-        elif mode == "1x1":
-            bottom_indices = [0]
-        else:
-            # Nx1 模式（2x1, 3x1, 4x1）：仅最底部一个子图
-            bottom_indices = [len(w.axes) - 1]
-
-        for i in bottom_indices:
-            w.axes[i].set_xlabel("时间 (s)")
-
-        # 为所有子图设置时间格式化器，确保各子图 X 轴刻度显示一致
-        for ax in w.axes:
-            ax.xaxis.set_major_formatter(FuncFormatter(
-                lambda s, _: format_time_seconds(float(s))))
-
     # ── 信号管理 ──
 
     def add_to_subplot(self, field_name: str) -> None:
-        """添加信号到当前选中的子图。"""
+        """添加信号到当前选中的子图（校验选中态/重复后委托 _add_to_subplot，D2）。"""
         w = self._widget
         idx = w._selected_subplot_idx
         if idx is None:
             w.log_message.emit("请先点击选中一个子图")
             return
-        if w.ctx is None:
-            return
-
-        # 检查信号是否已存在
-        if field_name in w.subplot_fields.get(idx, []):
+        if w.ctx is not None and field_name in w.subplot_fields.get(idx, []):
             w.log_message.emit(f"信号 [{w.ctx.get_label(field_name)}] 已在子图 {idx + 1} 中")
             return
-
-        # 检查子图容量
-        max_per_plot = LayoutController.LAYOUT_CONFIG.get(w._layout_mode, (0, 5))[1]
-        if max_per_plot > 0 and len(w.subplot_fields.get(idx, [])) >= max_per_plot:
-            w.log_message.emit(f"子图 {idx + 1} 已达到最大信号数 ({max_per_plot})")
-            return
-
-        if idx not in w.subplot_fields:
-            w.subplot_fields[idx] = []
-        w.subplot_fields[idx].append(field_name)
-        w.log_message.emit(f"添加信号 [{w.ctx.get_label(field_name)}] 到子图 {idx + 1}")
-        w.subplot_fields_changed.emit()
-        self.rebuild_plot()
+        self._add_to_subplot(idx, field_name)
 
     def remove_from_subplot(self, field_name: str) -> None:
         """从当前选中的子图移除信号。"""

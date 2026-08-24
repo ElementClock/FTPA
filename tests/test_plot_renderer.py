@@ -235,14 +235,13 @@ class TestPlotSubplotDelegates:
 class TestFullRebuildUsesRenderFromScratch:
     def test_clears_and_renders_each_subplot(self, renderer, mock_widget):
         with patch.object(renderer, "_render_subplot_from_scratch") as mock_render:
-            with patch.object(renderer, "_apply_axis_decorations"):
-                renderer._full_rebuild()
+            renderer._full_rebuild()
 
-                # 每个子图应调用一次 _render_subplot_from_scratch
-                assert mock_render.call_count == len(mock_widget.axes)
-                for call_args in mock_render.call_args_list:
-                    # 每次调用传入 crossing_fields 集合
-                    assert isinstance(call_args[0][2], set)
+            # 每个子图应调用一次 _render_subplot_from_scratch
+            assert mock_render.call_count == len(mock_widget.axes)
+            for call_args in mock_render.call_args_list:
+                # 每次调用传入 crossing_fields 集合
+                assert isinstance(call_args[0][2], set)
 
 
 # ── X 轴参考范围自适应 ──

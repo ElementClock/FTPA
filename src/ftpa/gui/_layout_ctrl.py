@@ -134,7 +134,7 @@ class LayoutController:
                     w._renderer.plot_subplot(ax, i, crossing_fields)
 
         # 设置底部子图的 X 轴标签，并为所有子图设置时间格式化
-        self._apply_bottom_axis_labels(mode)
+        self.apply_axis_decorations(mode)
 
         # 同步所有子图 X 轴范围：优先以有数据的子图为基准
         # 防止各子图因 ax.plot() 自动缩放而产生不一致的 xlim
@@ -143,9 +143,15 @@ class LayoutController:
             for ax in w.axes:
                 ax.set_xlim(ref_xlim)
 
-    def _apply_bottom_axis_labels(self, mode: str) -> None:
-        """为布局模式的底部子图设置 X 轴标签，并为所有子图设置时间格式化器。"""
+    def apply_axis_decorations(self, mode: str | None = None) -> None:
+        """为布局模式应用 X 轴装饰：底部子图 X 轴标签 + 全部子图时间格式化器。
+
+        唯一实现（D1）：PlotRenderer 等外部调用统一走这里；
+        mode 缺省时取当前布局模式；不触发重绘。
+        """
         w = self._widget
+        if mode is None:
+            mode = w._layout_mode
         bottom_indices: list[int] = []
 
         if mode == "1x1":
@@ -188,7 +194,7 @@ class LayoutController:
                 ax.grid(True, alpha=0.3)
                 w.axes.append(ax)
 
-        self._apply_bottom_axis_labels(mode)
+        self.apply_axis_decorations(mode)
         w.figure.tight_layout()
 
     # ── 子图边框样式 ──
