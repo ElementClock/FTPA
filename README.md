@@ -1,12 +1,12 @@
 # 飞机性能操稳数据处理项目
 
-FTPA (Flight Test Performance Analysis) 是一个用于分析飞机性能操稳试飞数据的 Python 工具包，支持 TXT（Tab 分隔）和 CSV 两种飞参数据格式，提供 PySide6 GUI 交互界面（外加 `--dry-run` 无界面验证入口）。
+FTPA (Flight Test Performance Analysis) 是一个用于分析飞机性能操稳试飞数据的 Python 工具包，支持 TXT（Tab 分隔）飞参数据格式，提供 PySide6 GUI 交互界面（外加 `--dry-run` 无界面验证入口）。CSV 飞参数据格式暂不开发（相关加载代码已移除）。
 
 ---
 
 ## 环境要求
 
-- Python 3.10+
+- Python 3.11+
 - Windows 10/11
 
 ## 安装步骤
@@ -48,7 +48,7 @@ Windows 下可直接双击项目根目录的 `FTPA_GUI.bat` 启动 GUI，
 
 ### GUI 模式（默认）
 
-启动 PySide6 图形界面，支持数据加载、参数浏览、交互绘图、穿越分析、系统分析、批量处理、数据导出等功能：
+启动 PySide6 图形界面，支持数据加载、参数浏览、交互绘图、穿越分析、区间分析、数据导出等功能：
 
 ```bash
 python -m ftpa.main
@@ -84,16 +84,7 @@ python -m ftpa.main --dry-run
 | 采样率 | ~31ms（约32Hz），TIME 格式 `HH:MM:SS:mmm` |
 | 映射表 | 需要 `参数名.csv`（`src/ftpa/data/`，唯一输入，可维护）进行"字段名↔中文标签"转换 |
 
-### CSV 格式（逗号分隔，无需映射表）
-
-| 属性 | 值 |
-|------|------|
-| 分隔符 | 逗号 `,` |
-| 编码 | 自动检测（UTF-8 / GBK / GB18030） |
-| 映射表 | **不需要**，列名即为标签 |
-| 数据模型 | 与 TXT 统一：`dict[str, np.ndarray]` |
-
-通道映射资源：`性能操稳-元-20241122.PY`（DIAdem 脚本），包含通道→单位和通道→中文名称的映射字典。
+> 注：CSV 飞参格式（逗号分隔、列名即标签）暂不开发，对应加载链路已移除。
 
 ---
 
@@ -113,7 +104,7 @@ FTPA/
 │       │   ├── services.py       #   32 行纯重导出（向后兼容入口）
 │       │   ├── _data_context/    #   DataContext Facade 子包
 │       │   │   ├── data_context.py     # 240 行 Facade 协调者
-│       │   │   ├── loading.py          # Strategy 模式加载器（TxtLoader/CsvLoader）
+│       │   │   ├── loading.py          # Strategy 模式加载器（TxtLoader，注册于 LOADERS）
 │       │   │   ├── query.py            # 只读数据查询服务（含 get_raw_data()）
 │       │   │   ├── export_service.py   # 数据导出
 │       │   │   ├── plot_data_service.py# 绘图数据提取
@@ -122,11 +113,7 @@ FTPA/
 │       │   │   └── protocols.py        # 窄接口 Protocol
 │       │   ├── panel_plot.py     #   交互绘图画布外观（PlotCanvasWidget）
 │       │   ├── panel_preview.py  #   右下角参数曲线预览区
-│       │   ├── panel_batch.py    #   批量处理面板
-│       │   ├── panel_export.py   #   导出面板
 │       │   ├── panel_log.py      #   日志面板
-│       │   ├── panel_stats.py    #   统计面板
-│       │   ├── panel_track.py    #   航迹面板
 │       │   ├── _layout_ctrl.py   #   布局控制器（1×1 / 4×1 / 2×2）
 │       │   ├── _plot_renderer.py #   绘图渲染器（信号绘制 + 管理）
 │       │   ├── _crossing_analyzer.py # 穿越分析器（穿越线 + 缩放 + 统计）
@@ -135,19 +122,17 @@ FTPA/
 │       │   ├── _drop_ctrl.py     #   拖放控制器（参数树拖到子图）
 │       │   ├── _downsampler.py   #   向量化 min-max 降采样
 │       │   ├── _font_config.py   #   Matplotlib CJK 字体配置
-│       │   ├── widgets.py        #   自定义控件（参数树、穿越控制）
-│       │   ├── worker.py         #   后台线程（DataLoaderWorker + AnalysisWorker）
+│       │   ├── widgets.py        #   自定义控件（ParameterTreeWidget 参数树）
+│       │   ├── worker.py         #   后台线程（DataLoaderWorker）
 │       │   └── log_handler.py    #   logging → GUI 日志桥接
 │       ├── data/                 # 数据加载子包
 │       │   ├── loader.py         #   TXT 数据加载（param_extract / extract_time）
-│       │   ├── csv_loader.py     #   CSV 数据加载
 │       │   ├── io.py             #   通用文件读取（含 ZIP Slip 防护）
 │       │   ├── cache.py          #   文件缓存（LRU + mtime 失效）
 │       │   ├── batch.py          #   批处理（batch_process_files 等3个函数）
 │       │   ├── label_map.py      #   标签映射（LabelMap，唯一输入 参数名.csv）
 │       │   ├── 参数名.csv         #   参数映射数据文件（唯一输入，可维护，UTF-8+BOM）
 │       │   ├── exporter.py       #   数据导出
-│       │   ├── column_config.py  #   列配置（CSV 列定义）
 │       │   ├── summary.py        #   数据摘要（generate/print_data_summary）
 │       │   └── enrichment.py     #   数据富化（add_weight_cg_to_data）
 │       ├── computing/            # 计算子包
@@ -159,16 +144,8 @@ FTPA/
 │       │   ├── basic.py          #   基础统计 + 穿越检测
 │       │   ├── multi.py          #   多变量统计 + 穿越分析
 │       │   └── event_detection.py#  起降事件检测
-│       ├── analysis/             # 系统分析框架（插件化）
-│       │   ├── config.py         #   分析配置
-│       │   ├── interface.py      #   分析接口定义
-│       │   ├── plugin_manager.py #   插件管理器
-│       │   ├── utils.py          #   分析工具函数
-│       │   ├── interval_analysis.py # 区间分析操作注册表（积分/极值/平均值等）
-│       │   ├── engines/          #   发动机分析子系统（*_analysis.py + *_report_generator.py）
-│       │   ├── fuel/             #   燃油分析子系统
-│       │   ├── power/            #   动力分析子系统
-│       │   └── cas/              #   CAS 分析子系统
+│       ├── analysis/             # 区间分析（GUI 直达功能；原插件化系统分析子系统源自 CSV 飞参工具、对 TXT 仅产占位报告，已整体移除）
+│       │   └── interval_analysis.py # 区间分析操作注册表（积分/极值/平均值等）
 │       └── utils/                # 工具子包
 │           ├── strings.py        #   字符串处理
 │           ├── paths.py          #   路径解析（不再依赖 data 层）
@@ -181,15 +158,11 @@ FTPA/
 │   ├── test_modules.py           # 模块测试
 │   ├── test_comprehensive.py     # 综合测试
 │   ├── test_gui.py               # GUI 测试
-│   ├── test_analysis.py          # 系统分析测试
 │   ├── test_exporter.py          # 导出测试
 │   ├── test_file_utils.py        # 文件工具测试
-│   ├── test_column_config.py     # 列配置测试
 │   ├── test_entrypoint.py        # 入口点测试（--dry-run）
 │   ├── test_config.py            # 配置测试
 │   ├── test_cache.py             # 缓存测试
-│   ├── test_csv_loader.py        # CSV 加载测试
-│   ├── test_csv_loader_filter.py # CSV 时间列过滤测试
 │   ├── test_plot_renderer.py     # 渲染器测试
 │   ├── test_region_ctrl.py       # 区域控制器测试
 │   ├── test_event_detection.py   # 事件检测测试
@@ -227,13 +200,12 @@ FTPA/
 ### 数据流
 
 ```
-原始数据文件 (.txt / .csv / .zip)
+原始数据文件 (.txt / .zip)
     ↓
 data/ (数据加载子包)
-  ├─ loader.py    → TXT: param_extract() → dtype 预声明 + 单次读取
-  └─ csv_loader.py → CSV: 自动编码检测 + 列配置
+  └─ loader.py → TXT: param_extract() → dtype 预声明 + 单次读取
     ↓
-data/label_map.py (标签映射，仅 TXT 需要；CSV 列名即为标签)
+data/label_map.py (标签映射，唯一输入 参数名.csv)
     ↓
 gui/_data_context/data_context.py (DataContext Facade: 统一数据模型 dict[str, np.ndarray])
     ↓
@@ -241,9 +213,7 @@ computing/ (计算子包: weight_cg / circle_fit / fuel_data / aircraft)
     ↓
 statistics/ (统计子包: basic / multi / event_detection)
     ↓
-analysis/ (系统分析框架: engines / fuel / power / cas)
-    ↓
-gui/ (PySide6 交互界面 + matplotlib 渲染)
+gui/ (PySide6 交互界面 + matplotlib 渲染；区间分析 analysis/interval_analysis)
     ↓
 输出结果 (图表 / 报告 / 截图)
 ```
@@ -253,8 +223,7 @@ gui/ (PySide6 交互界面 + matplotlib 渲染)
 **职责**: 从各种数据源加载试飞数据，并管理标签映射、批量处理、数据富化与摘要
 
 - `loader.py` — `param_extract()`: 统一入口提取参数数据（含 TIME 解析和 float64 转换，单次读取）；`extract_time()`: 从缓存提取时间序列
-- `csv_loader.py` — `csv_param_extract()`: CSV 格式数据加载，自动编码检测（chardet），列配置驱动处理
-- `io.py` — `read_data_file()`: 通用文件读取（支持 dtype 预声明跳过类型推断）；`resolve_zip_file()`: ZIP 自动解压（含 Zip Slip 路径遍历校验）
+- `io.py` — `read_data_file()`: 通用文件读取（支持 dtype 预声明跳过类型推断，表头编码 utf-8→gbk 探测）；`resolve_zip_file()`: ZIP 自动解压（含 Zip Slip 路径遍历校验）
 - `cache.py` — `FileCache`: OrderedDict LRU 缓存 + mtime 失效策略
 - `label_map.py` — `LabelMap`: 参数名称↔中文标签双向映射（**唯一输入 `参数名.csv`**，UTF-8+BOM；编码自动检测，缺失降级空映射；含单位与重复标签编号对照；可维护数据文件，改映射无需重打包）
   - `get_label()` / `get_var_name()` / `get_unit()` / `list_fields()` / `add()`: 标签查询与动态扩展
@@ -262,7 +231,6 @@ gui/ (PySide6 交互界面 + matplotlib 渲染)
 - `summary.py` — `generate_data_summary()` / `print_data_summary()`: 数据摘要（从 `statistics/multi.py` 迁入，消除循环依赖）
 - `enrichment.py` — `add_weight_cg_to_data()`: 数据富化（从 `computing/weight_cg.py` 迁入，修复跨层依赖）
 - `exporter.py` — `export_data()` / `export_statistics()`: 数据导出（支持 CSV / Parquet / HDF5 / Excel / JSON，JSON 可选 gzip 压缩）
-- `column_config.py` — `get_replacement_rules()` / `apply_replacement_rules()`: CSV 列配置
 
 ### 2. 计算层 (computing/)
 
@@ -281,18 +249,14 @@ gui/ (PySide6 交互界面 + matplotlib 渲染)
 - `multi.py` — `compute_var_stats()`: 多变量统计输出；`show_group_stats()`: 分组统计；`statistics_params()`: 通用参数统计摘要（统一实现 `_statistics_params_impl`）；`crossing_analysis()`: 阈值穿越分析（统一实现 `_crossing_analysis_impl`）；并重导出 `generate_data_summary` / `print_data_summary` 以保持向后兼容
 - `event_detection.py` — `compute_takeoff_landing_stats()`: 起降统计（触水时刻参数）
 
-### 4. 系统分析框架 (analysis/)
+### 4. 区间分析 (analysis/)
 
-**职责**: 插件化的子系统分析，支持发动机、燃油、动力、CAS 等分析模块
+**职责**: GUI 直达的单信号区间分析操作注册表。
 
-- `interface.py` — 分析接口基类定义
-- `plugin_manager.py` — 插件注册与发现
-- `config.py` — 分析配置管理
-- `utils.py` — 分析工具函数
-- `engines/` — 发动机分析子系统（`*_analysis.py` + `*_report_generator.py`）
-- `fuel/` — 燃油分析子系统
-- `power/` — 动力分析子系统
-- `cas/` — CAS 分析子系统
+> 原 engines/fuel/power/cas 插件化系统分析子系统源自 legacy CSV 飞参工具，
+> 对 TXT（ATA 编码列名）数据仅产出占位报告，已整体移除（含「系统分析」菜单与 AnalysisWorker）。
+
+- `interval_analysis.py` — `INTERVAL_OPERATIONS` 注册表 + `run_interval_analysis()`：积分（NaN 分段）/最大值/最小值/平均值/极值
 
 ### 5. GUI 层 (gui/)
 
@@ -303,7 +267,7 @@ gui/ (PySide6 交互界面 + matplotlib 渲染)
 - `services.py` — 32 行纯重导出文件，仅保留 `from ._data_context import DataContext, ...`，确保外部 `from .services import DataContext` 仍可用
 - `_data_context/` — **DataContext Facade 子包**（原 582 行 God Object 已拆分）：
   - `data_context.py` — 240 行 Facade 协调者，持有数据与子服务，仅负责生命周期管理与请求分发
-  - `loading.py` — Strategy 模式加载器（`TxtLoader` / `CsvLoader`，注册到 `LOADERS`），新增格式只需实现 `DataLoader` Protocol
+  - `loading.py` — Strategy 模式加载器（`TxtLoader`，注册到 `LOADERS`），新增格式只需实现 `DataLoader` Protocol
   - `query.py` — 只读数据查询服务（`DataQueryService`，含 `get_raw_data()`），遵循迪米特法则
   - `export_service.py` — 数据导出
   - `plot_data_service.py` — 绘图数据提取
@@ -321,10 +285,9 @@ gui/ (PySide6 交互界面 + matplotlib 渲染)
 - `panel_preview.py` — `PreviewPanel`: 右下角曲线预览区，点选右侧参数时刷新显示对应数据曲线（精简显示，仅曲线本身；可通过「视图 → 曲线预览」显示/隐藏）
 - `_downsampler.py` — `min_max_downsample()`: 向量化 min-max 降采样（np.reshape + nanmin/nanmax，500K 点 <1ms）
 - `_font_config.py` — `configure_display_font()`: Matplotlib CJK 字体配置（线程安全，从 `plotting.py` 提取）
-- `widgets.py` — `ParameterTreeWidget`: 参数树面板（完整参数库 + 不可用参数置灰）；`CrossingCtrl`: 穿越控制组件
+- `widgets.py` — `ParameterTreeWidget`: 参数树面板（完整参数库 + 不可用参数置灰）
 - `worker.py` — 后台线程：
   - `DataLoaderWorker`: 数据加载 QThread
-  - `AnalysisWorker`: 系统分析后台线程（执行 `SystemAnalyzer.analyze()` + `generate_reports()`，防 GUI 冻结）
 - `log_handler.py` — `install_gui_logger()`: logging → GUI 信息显示桥接
 
 #### 穿越分析交互（参照 MATLAB plotCoreInteractive.m）
@@ -340,7 +303,7 @@ gui/ (PySide6 交互界面 + matplotlib 渲染)
 
 - `time_utils.py` — `select_time_window()`: 时间窗口索引选择；`format_time_seconds()`: 数值秒→`HH:MM:SS.mmm` 格式化；`parse_time_to_seconds()` / `time_to_seconds_array()`: 时间解析
 - `strings.py` — `make_valid_name()`: 生成合法变量名；`column_to_field_name()`: 列名→字段名转换
-- `paths.py` — `resolve_path()`: 路径解析（相对路径自动搜寻已知目录）；`resolve_mapping_path()`: 自动发现映射文件 参数名.csv（打包版 exe 同目录外部覆盖优先，改映射无需重新打包）
+- `paths.py` — `resolve_path()`: 路径解析（用户传入路径不存在时告警并原样返回；`None` 时在 testdata/data 下惰性发现首个数据文件）；`resolve_mapping_path()`: 自动发现映射文件 参数名.csv（打包版 exe 同目录外部覆盖优先，改映射无需重新打包）
 - `file_utils.py` — 文件编码自动检测（chardet）、`is_safe_path()` 安全校验
 - `log_utils.py` — `setup_logging()`: 纯 Python 日志配置（零 Qt 依赖）
 
@@ -352,7 +315,7 @@ gui/ (PySide6 交互界面 + matplotlib 渲染)
 
 - `Config` 为不可变（`@dataclass(frozen=True)`）顶层配置，包含 `ZoomConfig` / `PlotConfig` / `DataConfig` / `GuiConfig` 四个子配置
 - 默认值在代码中定义；项目级覆盖通过 `ftpa_config.toml`（项目根目录）或用户级 `~/.ftpa/ftpa_config.toml` 提供
-- TOML 解析兼容 Python 3.11+ 内置 `tomllib`，Python 3.10 通过 `tomli` 回退
+- TOML 解析使用 Python 3.11+ 内置 `tomllib`（本项目要求 Python ≥3.11）
 - 模块级单例 `CONFIG = load_config()` 在导入时加载一次
 
 飞机参数常量位于 `src/ftpa/computing/aircraft.py`（`BASE_WEIGHT` / `BASE_REL_CG` / `BASE_OIL` / `X0` / `L`），如需更换机型只需修改此文件。
@@ -378,8 +341,7 @@ FtpaError                       # FTPA 基础异常
 └─ LoadError                    # 数据加载错误基类（携带 path 属性）
    ├─ FileNotFoundLoadError     # 文件不存在 / 路径无效
    ├─ FormatLoadError           # 文件格式错误 / 解析失败（携带 detail）
-   ├─ ResourceLoadError         # 内存不足 / I/O 错误
-   └─ LabelMapLoadError         # 映射表加载失败（不阻塞主流程，降级到无标签模式）
+   └─ ResourceLoadError         # 内存不足 / I/O 错误
 ```
 
 `loading.py` 中的 Loader 将内置异常转换为此层次中的对应类型（`raise X from e`），`worker.py` 按 `FtpaError` 子类映射为用户友好消息。
@@ -396,11 +358,9 @@ FtpaError                       # FTPA 基础异常
 | pandas | 数据处理 |
 | matplotlib | 静态可视化 |
 | PySide6 | GUI 图形界面 |
-| plotly | 交互式可视化 |
 | scipy | 科学计算（广义特征值分解） |
 | openpyxl | Excel 文件处理 |
 | chardet | 文件编码自动检测 |
-| tomli | Python 3.10 TOML 解析回退 |
 
 所有核心依赖均添加了兼容性上限约束（见 `requirements.txt`），防止主版本升级引入破坏性变更。
 
@@ -485,7 +445,6 @@ pytest --cov=src/ftpa --cov-report=html
 2. **计算**: NumPy 向量化运算
 3. **内存**: 数据裁剪、按需加载
 4. **GUI 渲染**: 后台线程加载防阻塞；向量化降采样（`_downsampler.py`）避免大数据集渲染卡顿；拖拽平移与 Y 轴自适应分离防抖
-5. **系统分析**: `AnalysisWorker` 后台线程执行，防 GUI 冻结
 
 ---
 
@@ -509,7 +468,7 @@ pytest tests/test_unit.py -v
 - [ ] 所有单元测试通过
 - [ ] `python -m ftpa.main --dry-run` 正常运行（无头环境可用）
 - [ ] `python -m ftpa.main` 正常启动 GUI
-- [ ] 数据提取功能正常（TXT / CSV）
+- [ ] 数据提取功能正常（TXT）
 - [ ] 重量重心计算正常
 - [ ] 统计计算正常
 - [ ] 时间解析正常
